@@ -1,0 +1,40 @@
+// go:build ignore
+// +build ignore
+
+package main
+
+var Resolution vec2
+
+func Fragment(position vec4, texCoord vec2, color vec4) vec4 {
+    if position.x > Resolution.x / 2 && position.y < Resolution.y / 2 {
+        // return vec4(1, 0, 0, 0.4)
+    }
+
+    size := vec2(400, 100)
+    pos := vec2(Resolution.x/2 - size.x/2, Resolution.y - 120)
+    if position.x > pos.x && position.x < pos.x + size.x && position.y > pos.y && position.y < pos.y + size.y {
+        return vec4(0.1, 0.1, 0.1, 0.9)
+    }
+
+    // return position.x - pos.x
+
+
+    return vec4(0)
+    // return vec4(Rectangle(vec2(Resolution.x / 2 - 300 / 2), vec2(300, 200)))
+}
+
+
+// func RoundBox(position vec2, c vec2, size vec2, edge float){
+// 	vec2 d=abs(p-c)-size+edge;
+// 	float l=length(max(d,0.))+min(max(d.x,d.y),0.);
+// 	return step(l-edge,0.);
+// }
+
+func Rectangle() vec4 {
+
+    return vec4(0)
+}
+
+// func Rectangle(position vec2, size vec2) float {
+// 	return max(abs(position.x) - size.x, abs(position.y) - size.y);
+// }

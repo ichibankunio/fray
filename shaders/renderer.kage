@@ -1,0 +1,180 @@
+// go:build ignore
+// +build ignore
+
+package main
+
+var Pos vec2//camera positon(x, y) (one block = 1)
+var PosZ float//Camera position z (PosZ = 1 means camera is at one block above the PosZ = 0)
+var Dir vec2//camera dir
+var Plane vec2//camera plane
+
+var Pitch float
+
+var SpriteNum int
+var SpriteParameterNum int
+
+var TexSize float//single wall/floor/sprite size in px
+var ScreenSize vec2
+var PlayerAnimationIndex float
+
+//imageSrc0 = sprite texture
+//imageSrc1 = floor/wall texture
+//imageSrc1 and imageSrc2 should be unified (2023/3/31 done!)
+//imageSrc2 = sprite ID, distance toward camera、xy coordinates of top-left position on screen, (width, height) on screen
+//imageSrc3.g = height of walls 　imageSrc3.r = floor texture ID(side, not including top)
+
+
+func Fragment(position vec4, texCoord vec2, color vec4) vec4 {
+
+    texOrigin, _ := imageSrcRegionOnTexture()   
+
+    cameraX := 2.0 * (1.0 - position.x / ScreenSize.x) - 1.0 //x-coordinate in camera space
+
+    rayDir := Dir + Plane * cameraX
+
+    mapPos := floor(Pos + 0.0)
+
+    raycasterPos := Pos
+
+    deltaDist := abs(1.0/rayDir)
+    perpWallDist := 0.0
+
+    unit := sign(rayDir)
+    side := -1.0
+
+    sideDist := (unit * (mapPos - Pos) + (unit * 0.5) + 0.5) * deltaDist
+
+
+    lineHeight := 0.0
+    rayHeight := imageSrc3UnsafeAt(texOrigin + mapPos/imageSrcTextureSize()).g * 255//ray's initial height = ground height at camera's position
+    spriteBlending := vec4(0)
+
+    //DDA algorism
+    for i := 0; i < 30; i++ {
+        //jump to next map square, OR in x-direction, OR in y-direction
+        if sideDist.x < sideDist.y {
+            sideDist.x += deltaDist.x
+            mapPos.x += unit.x
+            side = 0.0
+        } else {
+            sideDist.y += deltaDist.y
+            mapPos.y += unit.y
+            side = 1.0
+        }
+
+        if imageSrc3UnsafeAt(texOrigin + mapPos/imageSrcTextureSize()).g * 255 != rayHeight {//g: height map(1~255 uint8)
+
+            perpWallDist = side * (sideDist.y - deltaDist.y) + (1.0 - side) * (sideDist.x - deltaDist.x)
+
+            //sprite casting
+            squaredEuclidean := perpWallDist * perpWallDist * (rayDir.x * rayDir.x + rayDir.y * rayDir.y) // euclidean = perpWallDist * |rayDir|
+
+            for i := 0; i < 4; i++ {
+                sizeOnScreen := vec2(DecodeFloatRGBA(imageSrc2UnsafeAt(texOrigin+vec2(SpriteParameterNum * i + 2, 0)/imageSrcTextureSize())), DecodeFloatRGBA(imageSrc2UnsafeAt(texOrigin+vec2(SpriteParameterNum * i + 3, 0)/imageSrcTextureSize()))) * ScreenSize * 100
+
+                distanceToCamera := DecodeFloatRGBA(imageSrc2UnsafeAt(texOrigin+vec2(SpriteParameterNum * i + 4, 0)/imageSrcTextureSize())) * 200
+
+                signOfPos := vec2(DecodeFloatRGBA(imageSrc2UnsafeAt(texOrigin+vec2(SpriteParameterNum * i + 5, 0)/imageSrcTextureSize())), DecodeFloatRGBA(imageSrc2UnsafeAt(texOrigin+vec2(SpriteParameterNum * i + 6, 0)/imageSrcTextureSize())))
+
+                posOnScreen := (vec2(DecodeFloatRGBA(imageSrc2UnsafeAt(texOrigin+vec2(SpriteParameterNum * i, 0)/imageSrcTextureSize())), DecodeFloatRGBA(imageSrc2UnsafeAt(texOrigin+vec2(SpriteParameterNum * i + 1, 0)/imageSrcTextureSize()))) - signOfPos) * ScreenSize
+
+                TexIDBegin := DecodeFloatRGBA(imageSrc2UnsafeAt(texOrigin+vec2(SpriteParameterNum*i+7, 0)/imageSrcTextureSize())) * 255
+
+                CurrentAnimation := DecodeFloatRGBA(imageSrc2UnsafeAt(texOrigin+vec2(SpriteParameterNum*i+8, 0)/imageSrcTextureSize())) * 255
+
+                if distanceToCamera >= 0 && distanceToCamera < squaredEuclidean && position.x > posOnScreen.x && position.x < posOnScreen.x + sizeOnScreen.x && position.y > posOnScreen.y && position.y < posOnScreen.y + sizeOnScreen.y {
+
+                    // posOnTexture := vec2((position.x - posOnScreen.x) / sizeOnScreen.x + mod(mod(Counter, 16), ScreenSize.x / TexSize), (position.y - posOnScreen.y) / sizeOnScreen.y + floor(mod(Counter, 16) / (ScreenSize.x / TexSize))) * TexSize
+                    posOnTexture := vec2((position.x - posOnScreen.x) / sizeOnScreen.x + mod(TexIDBegin + CurrentAnimation, ScreenSize.x / TexSize), (position.y - posOnScreen.y) / sizeOnScreen.y + floor((TexIDBegin + CurrentAnimation) / (ScreenSize.x / TexSize))) * TexSize
+
+                    clr := imageSrc0UnsafeAt(texOrigin + posOnTexture/imageSrcTextureSize())
+
+                    if clr.a > 0 {
+                        if sizeOnScreen.x > ScreenSize.x*1.5 {//(WIP)
+                            spriteBlending = vec4(clr.rgb, ScreenSize.x*1.5 / sizeOnScreen.x)
+                        }else {
+                            return vec4(clr)
+                        }
+                    }
+                }
+            }
+          
+
+            wallX := fract(side * (Pos.x + perpWallDist*rayDir.x) + (1.0 - side) * (Pos.y + perpWallDist*rayDir.y))
+
+            lastRenderedWallTop := ScreenSize.y / perpWallDist * rayHeight
+
+
+            rayHeight = imageSrc3UnsafeAt(texOrigin + mapPos/imageSrcTextureSize()).g * 255//getting wall height at current ray position
+            
+
+            wallTextureID := imageSrc3UnsafeAt(texOrigin + mapPos/imageSrcTextureSize()).r * 255//getting wall texture id to draw(int value [0,255])
+
+    
+            lineHeight = ScreenSize.y / perpWallDist * rayHeight
+
+            eyeHeight := PosZ * ScreenSize.y / perpWallDist
+
+            drawStart := -lineHeight + ScreenSize.y / 2.0 + eyeHeight + Pitch
+            drawEnd := ScreenSize.y / 2.0 + eyeHeight + Pitch - lastRenderedWallTop
+
+            if position.y >= drawStart && position.y <= drawEnd {//wall casting
+
+                posOnTexture := vec2((wallX + mod(wallTextureID, ScreenSize.x / TexSize)) * TexSize, fract((position.y - drawStart) / lineHeight * rayHeight) * TexSize)
+                
+                clr := imageSrc1UnsafeAt(texOrigin + posOnTexture/imageSrcTextureSize())
+                clr = side * vec4(clr.rgb-vec3(0.1), 1) + (1.0 - side) * vec4(clr.rgb, 1.0)
+
+                return vec4(clr.rgb + (spriteBlending.rgb - clr.rgb) * spriteBlending.a, 1)
+
+            }else if position.y > drawEnd {//floor casting
+
+                rayHitPos := vec2(mapPos.x + side * wallX + (1.0 - side) * (0.5 - 0.5 * sign(rayDir.x)), mapPos.y + (1.0-side) * wallX + side*((0.5 - 0.5 * sign(rayDir.y))))
+
+                distanceBottomOfWallFromCamera := perpWallDist
+
+                offsetZ := ((PosZ-imageSrc3UnsafeAt(texOrigin + raycasterPos/imageSrcTextureSize()).g*255)-0.5)*ScreenSize.y
+                // raycasterPos/imageSrcTextureSize()).g*255 is ground height at current raycaster xy position
+             
+                distanceNearestFloorFromCamera := (ScreenSize.y + 2.0*offsetZ) / (2.0*(position.y - Pitch) - ScreenSize.y)
+    
+                weight := distanceNearestFloorFromCamera / distanceBottomOfWallFromCamera//0-1
+
+                currentFloor := vec2(weight*rayHitPos.x+(1.0-weight)*(Pos.x), weight*rayHitPos.y+(1.0-weight)*Pos.y) //linear interpolation
+
+                floorTextureID := imageSrc3UnsafeAt(texOrigin + currentFloor/imageSrcTextureSize()).b * 255//getting floor texture id to draw(int value [0,255])
+
+                posOnTexture := vec2((fract(currentFloor.x) + mod(floorTextureID, ScreenSize.x / TexSize)) * TexSize, (fract(currentFloor.y)) * TexSize)
+
+
+                texOrigin, _ := imageSrcRegionOnTexture()
+                clr := imageSrc1UnsafeAt(texOrigin + posOnTexture/imageSrcTextureSize())
+                return vec4(clr.rgb + (spriteBlending.rgb - clr.rgb) * spriteBlending.a, 1)
+
+            }else if position.y < drawStart {//preparation for next floor(top of cube) casting
+                latestHitMapPos := mapPos + unit * 0.01
+
+                raycasterPos = vec2(latestHitMapPos.x + side * wallX + (1.0 - side) * (0.5 - 0.5 * sign(rayDir.x)), latestHitMapPos.y + (1.0-side) * wallX + side*((0.5 - 0.5 * sign(rayDir.y))))
+            }
+        }
+
+    }
+
+    // clr := vec4(160.0/255.0, 216.0/255.0, 239.0/255.0, 1) //skyblue
+    clr := vec4(0)
+    return vec4(clr.rgb + (spriteBlending.rgb - clr.rgb) * spriteBlending.a, 1)
+}
+
+func EncodeFloatRGBA(v float) vec4 {
+    enc := vec4(1.0, 255.0, 65025.0, 16581375.0) * v
+    enc = fract(enc)
+    enc -= enc.yzww * vec4(1.0/255.0,1.0/255.0,1.0/255.0,0.0)
+    return enc
+}
+
+func DecodeFloatRGBA(rgba vec4) float {
+    return dot(rgba, vec4(1.0, 1/255.0, 1/65025.0, 1/16581375.0))
+}
+
+
+
