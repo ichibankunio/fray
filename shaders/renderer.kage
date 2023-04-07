@@ -15,7 +15,7 @@ var SpriteParameterNum int
 
 var TexSize float//single wall/floor/sprite size in px
 var ScreenSize vec2
-var PlayerAnimationIndex float
+// var PlayerAnimationIndex float
 
 //imageSrc0 = sprite texture
 //imageSrc1 = floor/wall texture
@@ -50,7 +50,7 @@ func Fragment(position vec4, texCoord vec2, color vec4) vec4 {
     spriteBlending := vec4(0)
 
     //DDA algorism
-    for i := 0; i < 30; i++ {
+    for i := 0; i < 100; i++ {
         //jump to next map square, OR in x-direction, OR in y-direction
         if sideDist.x < sideDist.y {
             sideDist.x += deltaDist.x
@@ -62,6 +62,10 @@ func Fragment(position vec4, texCoord vec2, color vec4) vec4 {
             side = 1.0
         }
 
+        if mapPos.x < 0 || mapPos.y < 0 {
+            break
+        }
+
         if imageSrc3UnsafeAt(texOrigin + mapPos/imageSrcTextureSize()).g * 255 != rayHeight {//g: height map(1~255 uint8)
 
             perpWallDist = side * (sideDist.y - deltaDist.y) + (1.0 - side) * (sideDist.x - deltaDist.x)
@@ -69,7 +73,7 @@ func Fragment(position vec4, texCoord vec2, color vec4) vec4 {
             //sprite casting
             squaredEuclidean := perpWallDist * perpWallDist * (rayDir.x * rayDir.x + rayDir.y * rayDir.y) // euclidean = perpWallDist * |rayDir|
 
-            for i := 0; i < 4; i++ {
+            for i := 0; i < 6; i++ {
                 sizeOnScreen := vec2(DecodeFloatRGBA(imageSrc2UnsafeAt(texOrigin+vec2(SpriteParameterNum * i + 2, 0)/imageSrcTextureSize())), DecodeFloatRGBA(imageSrc2UnsafeAt(texOrigin+vec2(SpriteParameterNum * i + 3, 0)/imageSrcTextureSize()))) * ScreenSize * 100
 
                 distanceToCamera := DecodeFloatRGBA(imageSrc2UnsafeAt(texOrigin+vec2(SpriteParameterNum * i + 4, 0)/imageSrcTextureSize())) * 200
@@ -160,8 +164,11 @@ func Fragment(position vec4, texCoord vec2, color vec4) vec4 {
 
     }
 
-    // clr := vec4(160.0/255.0, 216.0/255.0, 239.0/255.0, 1) //skyblue
-    clr := vec4(0)
+    clr := vec4((160.0+128.0*(position.y/ScreenSize.y))/255.0, (216.0+128.0*(position.y/ScreenSize.y))/255.0, (239.0+128.0*(position.y/ScreenSize.y))/255.0, 1) //skyblue
+    // clr := vec4(0*(position.y/ScreenSize.y)/255.0, 255.0*(position.y/ScreenSize.y)/255.0, 255.0*(position.y/ScreenSize.y)/255.0, 1) //skyblue
+    // clr := vec4(142.0/255.0, 255.0/255.0, 255.0/255.0, 1)
+    // clr := vec4(0.55, 1.0, 1.0, 1)
+    // clr := vec4(0)
     return vec4(clr.rgb + (spriteBlending.rgb - clr.rgb) * spriteBlending.a, 1)
 }
 

@@ -40,10 +40,12 @@ type Renderer struct {
 	levelWidth  int
 	levelHeight int
 
-	playerAnimationIndex int
-	counter              int
+	// playerAnimationIndex int
+	counter int
 
 	jumpButton *ui.Button
+	jumpCounter int
+	JumpCountMax int
 
 	SpriteParameterNum int
 	SpriteParameters   []float32
@@ -76,12 +78,15 @@ func (r *Renderer) Init(screenWidth, screenHeight float64, texSize int) {
 	}
 
 	r.counter = 0
-	r.playerAnimationIndex = 16
+	// r.playerAnimationIndex = 16
 	// r.textures = textures
 
 	r.SpriteParameterNum = 9
 
-	r.jumpButton = ui.NewButton("jump", int(r.screenWidth)-100, 50, 100, 100, bitmapfont.Face, ui.ThemeRect, color.White, color.RGBA{64, 64, 64, 64}, color.RGBA{64, 64, 64, 64})
+	r.jumpButton = ui.NewButton("ジャンプ", int(r.screenWidth)-100, 60, 100, 100, bitmapfont.Face, ui.ThemeRect, color.White, color.RGBA{20, 20, 20, 100}, color.RGBA{20, 20, 20, 100})
+
+	r.jumpCounter = 0
+	r.JumpCountMax = 5
 }
 
 func (r *Renderer) SetTextures(textures [4]*ebiten.Image) {
@@ -187,13 +192,13 @@ func (r *Renderer) Update() {
 	// fmt.Printf("cam%f, sub%f\n", r.Cam.pos, r.Cam.subjectPos)
 
 	r.counter++
-	if r.Cam.v.SquaredLength() > 0 {
-		if r.counter%2 == 0 {
-			r.playerAnimationIndex = (r.playerAnimationIndex + 1) % 16
-		}
-	} else {
-		r.playerAnimationIndex = 16
-	}
+	// if r.Cam.v.SquaredLength() > 0 {
+	// 	if r.counter%2 == 0 {
+	// 		r.playerAnimationIndex = (r.playerAnimationIndex + 1) % 16
+	// 	}
+	// } else {
+	// 	r.playerAnimationIndex = 16
+	// }
 }
 
 func (r *Renderer) Draw(screen *ebiten.Image) {
@@ -245,7 +250,7 @@ func (r *Renderer) renderWall(screen *ebiten.Image) {
 
 		"TexSize": float32(r.texSize),
 
-		"PlayerAnimationIndex": float32(r.playerAnimationIndex),
+		// "PlayerAnimationIndex": float32(r.playerAnimationIndex),
 		// "Level":       r.Wld.level[0],
 		// "FloorLevel":  r.Wld.level[1],
 
@@ -283,24 +288,24 @@ func (r *Renderer) UpdateCamPos() {
 	r.Cam.v = vec3.New(0, 0, 0)
 	if ebiten.IsKeyPressed(ebiten.KeyW) || ebiten.IsKeyPressed(ebiten.KeyUp) || r.Stk.Input[0] == STICK_UP {
 		// if ebiten.IsKeyPressed(ebiten.KeyW) || ebiten.IsKeyPressed(ebiten.KeyUp) || ebiten.GamepadAxisValue(0, 1) < -0.1 || r.Stk.Input[0] == STICK_UP {
-		r.Cam.v = r.collisionCheckedDelta(r.Cam.subjectPos, r.Cam.dir.Scale(r.Cam.speed), r.Cam.collisionDistance)
+		r.Cam.v = r.collisionCheckedDelta(r.Cam.subjectPos, r.Cam.dir.Scale(r.Cam.Speed), r.Cam.collisionDistance)
 
 		// r.Cam.pos = r.GetValidPos(r.Cam.por.X + r.Cam.dir.X*v, r.Cam.por.Y + r.Cam.dir.Y*v)
 	} else if ebiten.IsKeyPressed(ebiten.KeyS) || ebiten.IsKeyPressed(ebiten.KeyDown) || r.Stk.Input[0] == STICK_DOWN {
 		// } else if ebiten.IsKeyPressed(ebiten.KeyS) || ebiten.IsKeyPressed(ebiten.KeyDown) || ebiten.GamepadAxisValue(0, 1) > 0.1 || r.Stk.Input[0] == STICK_DOWN {
-		r.Cam.v = r.collisionCheckedDelta(r.Cam.subjectPos, r.Cam.dir.Scale(-r.Cam.speed), r.Cam.collisionDistance)
+		r.Cam.v = r.collisionCheckedDelta(r.Cam.subjectPos, r.Cam.dir.Scale(-r.Cam.Speed), r.Cam.collisionDistance)
 		// r.Cam.pos = r.Cam.pos.Add(delta)
 		// r.Cam.subjectPos = r.Cam.subjectPos.Add(delta)
 
 	} else if ebiten.IsKeyPressed(ebiten.KeyD) || r.Stk.Input[0] == STICK_RIGHT {
 		// } else if ebiten.IsKeyPressed(ebiten.KeyD) || ebiten.GamepadAxisValue(0, 0) > 0.1 || r.Stk.Input[0] == STICK_RIGHT {
-		r.Cam.v = r.collisionCheckedDelta(r.Cam.subjectPos, r.Cam.plane.Scale(-r.Cam.speed), r.Cam.collisionDistance)
+		r.Cam.v = r.collisionCheckedDelta(r.Cam.subjectPos, r.Cam.plane.Scale(-r.Cam.Speed), r.Cam.collisionDistance)
 		// r.Cam.pos = r.Cam.pos.Add(delta)
 		// r.Cam.subjectPos = r.Cam.subjectPos.Add(delta)
 
 	} else if ebiten.IsKeyPressed(ebiten.KeyA) || r.Stk.Input[0] == STICK_LEFT {
 		// } else if ebiten.IsKeyPressed(ebiten.KeyA) || ebiten.GamepadAxisValue(0, 0) < -0.1 || r.Stk.Input[0] == STICK_LEFT {
-		r.Cam.v = r.collisionCheckedDelta(r.Cam.subjectPos, r.Cam.plane.Scale(r.Cam.speed), r.Cam.collisionDistance)
+		r.Cam.v = r.collisionCheckedDelta(r.Cam.subjectPos, r.Cam.plane.Scale(r.Cam.Speed), r.Cam.collisionDistance)
 		// r.Cam.pos = r.Cam.pos.Add(delta)
 		// r.Cam.subjectPos = r.Cam.subjectPos.Add(delta)
 
@@ -348,10 +353,16 @@ func (r *Renderer) UpdateCamPos() {
 	*/
 }
 
+func (r *Renderer) IsRunningOnGround() bool {
+	return r.Cam.v.SquaredLength() > 0 && r.Cam.subjectPos.Z - (r.GetGroundHeight(r.Cam.subjectPos)+r.Cam.shooterHeight) == 0
+}
+
 func (r *Renderer) UpdateCamPosZ() {
 	// if inpututil.IsKeyJustReleased(ebiten.KeySpace) || flib.IsThereJustReleasedTouch(r.jumpButton.Spr.Pos, vec2.New(float64(r.jumpButton.Spr.Img.Bounds().Dx()), float64(r.jumpButton.Spr.Img.Bounds().Dy()))) {
-	if inpututil.IsKeyJustReleased(ebiten.KeySpace) || flib.IsThereJustReleasedTouch(r.jumpButton.Spr.Pos, vec2.New(100, 100)) {
+	// if (inpututil.IsKeyJustReleased(ebiten.KeySpace) || flib.IsThereJustReleasedTouch(r.jumpButton.Spr.Pos, vec2.New(100, 100))) && r.Cam.subjectPos.Z - (r.GetGroundHeight(r.Cam.subjectPos)+r.Cam.shooterHeight) == 0 {
+	if (inpututil.IsKeyJustReleased(ebiten.KeySpace) || flib.IsThereJustReleasedTouch(r.jumpButton.Spr.Pos, vec2.New(100, 100))) && r.jumpCounter < r.JumpCountMax {
 		r.Cam.vZ = 4
+		r.jumpCounter ++
 	}
 
 	r.Cam.vZ += GRAVITY
@@ -362,10 +373,19 @@ func (r *Renderer) UpdateCamPosZ() {
 		r.Cam.vZ = 0
 		r.Cam.subjectPos.Z = (r.GetGroundHeight(r.Cam.subjectPos) + r.Cam.shooterHeight)
 	}
+
+	if r.Cam.subjectPos.Z - (r.GetGroundHeight(r.Cam.subjectPos)+r.Cam.shooterHeight) == 0 {
+		r.jumpCounter = 0
+	}
+
 	// if r.GetGroundHeight(r.Cam.subjectPos) < r.GetGroundHeight(r.Cam.pos) {
 	// 	r.Cam.pos.Z = r.collisionCheckedDeltaZ(r.Cam.pos, r.Cam.vZ)
 	// }else {
 	// 	r.Cam.pos.Z = r.Cam.subjectPos.Z
 	// }
 	r.Cam.pos.Z = r.Cam.subjectPos.Z
+}
+
+func (r *Renderer) GetTexSize() int {
+	return r.texSize
 }

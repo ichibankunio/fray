@@ -51,6 +51,15 @@ func (r *Renderer) castRayMultiHeight(dir, plane vec2.Vec2, pos vec3.Vec3) *Ray 
 			side = 1.0
 		}
 
+		// fmt.Printf("%f, %d\n", mapPos, int(mapPos.Y)*r.levelWidth+int(mapPos.X))
+		if mapPos.X < 0 || mapPos.Y < 0 || mapPos.X > float64(r.levelWidth-1) || mapPos.Y > float64(r.levelHeight-1) {
+			return &Ray{
+				perpWallDist:       perpWallDist,
+				squaredEuclidean:   perpWallDist * perpWallDist * (rayDir.X*rayDir.X + rayDir.Y*rayDir.Y),
+				detectedWallHeight: 255,
+			}
+		}
+
 		if r.Wld.levelUint8[0][int(mapPos.Y)*r.levelWidth+int(mapPos.X)] >= 1 {
 			// hit = 1
 			break
@@ -137,5 +146,12 @@ func (r *Renderer) collisionCheckedDeltaZ(pos vec3.Vec3, delta float64) float64 
 }
 
 func (r *Renderer) GetGroundHeight(pos vec3.Vec3) float64 {
+	if pos.Y/float64(r.texSize) < 0 {
+		pos.Y = 0
+	}
+	if pos.X/float64(r.texSize) < 0 {
+		pos.X = 0
+	}
+
 	return float64(r.Wld.levelUint8[1][int(pos.Y/float64(r.texSize))*r.levelWidth+int(pos.X/float64(r.texSize))]) * float64(r.texSize)
 }

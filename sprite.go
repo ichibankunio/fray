@@ -18,14 +18,16 @@ type Sprite struct {
 
 	TexIDBegin       int
 	CurrentAnimation int
+	IsVisible bool
 }
 
-func (r *Renderer) NewSprite(pos vec2.Vec2, texID int, texIDBegin int, currentAnimation int) {
+func (r *Renderer) NewSprite(pos vec2.Vec2, texID int, texIDBegin int, currentAnimation int, isVisible bool) {
 	s := &Sprite{
 		TexID:            texID,
-		Pos:              vec3.New(pos.X, pos.Y, r.GetGroundHeight(vec3.New(pos.X, pos.Y, 0))+float64(r.texSize)/2),
+		Pos:              vec3.New(pos.X, pos.Y, r.GetGroundHeight(vec3.New(pos.X, pos.Y, 0))+float64(r.texSize)),
 		TexIDBegin:       texIDBegin,
 		CurrentAnimation: currentAnimation,
+		IsVisible: isVisible,
 	}
 
 	r.Wld.Sprites = append(r.Wld.Sprites, s)
@@ -39,7 +41,7 @@ func (r *Renderer) updateSpriteParameters() {
 
 	// fmt.Printf("%f, %f, %f\n", r.Cam.GetPos(), r.Cam.subjectPos, r.Wld.Sprites[0].Pos.Z)
 
-	r.Wld.Sprites[0].Pos = r.Cam.subjectPos.Add(vec3.New(0, 0, -r.Cam.shooterHeight/2))
+	r.Wld.Sprites[0].Pos = r.Cam.subjectPos
 	// r.Wld.Sprites[0].CurrentAnimation =
 	if r.Cam.v.SquaredLength() > 0 {
 		if r.counter%2 == 0 {
@@ -63,10 +65,8 @@ func (r *Renderer) updateSpriteParameters() {
 		// println(int(r.Cam.pos.Z - r.GetGroundHeight(r.Cam.pos) - r.Cam.shooterHeight))
 		// offsetByPlayerZ := math.Abs(r.screenHeight/transPos.Y) * (r.Cam.subjectPos.Z - r.GetGroundHeight(r.Cam.subjectPos) - r.Cam.shooterHeight) / float64(r.texSize)
 		offsetByCamZ := math.Abs(r.screenHeight/transPos.Y) * (r.Cam.pos.Z + r.Cam.subjectPos.Z - r.Cam.pos.Z) / float64(r.texSize)
-		offsetBySpriteZ := math.Abs(r.screenHeight/transPos.Y) * (spr.Pos.Z) / float64(r.texSize)
-		// println("offsetByPlayerZ: ", offsetByCamZ, "offsetBySpriteZ: ", offsetBySpriteZ)
-		// println("camZ: ", r.Cam.subjectPos.Z, "SpriteZ: ", spr.Pos.Z)
-		// offsetBySpriteZ := math.Abs(r.screenHeight/transPos.Y) * (r.Cam.subjectPos.Z - r.GetGroundHeight(r.Cam.subjectPos) - r.Cam.shooterHeight) / float64(r.texSize)
+		offsetBySpriteZ := math.Abs(r.screenHeight/transPos.Y) * (spr.Pos.Z - float64(r.texSize)/2) / float64(r.texSize)
+		// 2023/4/1 r.texSize/2を引いてspriteがPosよりも半ブロック分上に描画される問題を仮修正
 
 		//calculate height of the sprite on screen
 		spriteSize := vec2.New(math.Abs(r.screenHeight/transPos.Y), math.Abs(r.screenHeight/transPos.Y))
@@ -105,6 +105,14 @@ func (r *Renderer) updateSpriteParameters() {
 		if math.Abs(spr.PosOnScreen.Y) > 1.0 {
 			spr.Size = vec2.New(0, 0)
 		}
+
+		if !spr.IsVisible {
+			spr.Size = vec2.New(0, 0)
+		}
+
+		// if spr.Size.X < 0.00001 {
+		// 	spr.Size = vec2.New(0, 0)
+		// }
 
 		if spr.PosOnScreen.X > -0.004 && spr.PosOnScreen.X < 0 { //-0.002など1/255=0.003921...より絶対値が小さいときencode/decodeが上手くいかないので-0.004に変えてチラつくのを回避
 			spr.PosOnScreen.X = -0.004

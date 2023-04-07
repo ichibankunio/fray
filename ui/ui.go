@@ -36,7 +36,7 @@ func NewUIManager(width, height int, dialogFont font.Face) *UIManager {
 	}
 }
 
-func (uim UIManager) Draw(screen *ebiten.Image) {
+func (uim UIManager) Draw(screen *ebiten.Image, message string) {
 	op := &ebiten.DrawRectShaderOptions{}
 
 	op.Uniforms = map[string]interface{}{
@@ -45,7 +45,13 @@ func (uim UIManager) Draw(screen *ebiten.Image) {
 
 	screen.DrawRectShader(uim.ScreenWidth, uim.ScreenHeight, shader, op)
 
-	uim.drawTextTest(screen)
+	uim.drawText(screen, message)
+}
+
+func (uim UIManager) drawText(screen *ebiten.Image, message string) {
+	op := &ebiten.DrawImageOptions{}
+	op.GeoM.Translate(150, 270)
+	text.DrawWithOptions(screen, message, uim.DialogFont, op)
 }
 
 func (uim UIManager) drawTextTest(screen *ebiten.Image) {

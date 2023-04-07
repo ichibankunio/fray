@@ -40,7 +40,7 @@ type Camera struct {
 	shooterHeight float64
 	shooterRadius float64
 
-	speed float64
+	Speed float64
 	v     vec3.Vec3
 	vZ    float64
 	// vecV vec2.Vec2
@@ -57,6 +57,10 @@ func (c *Camera) SetPos(pos vec3.Vec3) {
 
 func (c *Camera) GetPos() vec3.Vec3 {
 	return c.pos
+}
+
+func (c *Camera) GetSubjectPos() vec3.Vec3 {
+	return c.subjectPos
 }
 
 func (c *Camera) GetPlane() vec2.Vec2 {
@@ -85,7 +89,7 @@ func (c *Camera) Init(screenWidth, screenHeight float64) {
 
 	c.zoomed = false
 
-	c.speed = 2.0
+	c.Speed = 2.0
 	c.v = vec3.New(0, 0, 0)
 	c.vZ = -1.0
 	// c.posZ = 0
