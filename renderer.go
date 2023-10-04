@@ -11,7 +11,7 @@ import (
 	"github.com/hajimehoshi/ebiten/v2/inpututil"
 	"github.com/ichibankunio/flib"
 	"github.com/ichibankunio/flib/ui"
-	"github.com/ichibankunio/flib/vec2"
+	"github.com/ichibankunio/fvec/vec2"
 	"github.com/ichibankunio/fray/spriteeditor"
 	"github.com/ichibankunio/fvec/vec3"
 )
