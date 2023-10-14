@@ -74,17 +74,17 @@ func Fragment(position vec4, texCoord vec2, color vec4) vec4 {
             squaredEuclidean := perpWallDist * perpWallDist * (rayDir.x * rayDir.x + rayDir.y * rayDir.y) // euclidean = perpWallDist * |rayDir|
 
             for i := 0; i < 6; i++ {
-                sizeOnScreen := vec2(DecodeFloatRGBA(imageSrc2UnsafeAt(texOrigin+vec2(SpriteParameterNum * i + 2, 0)/imageSrcTextureSize())), DecodeFloatRGBA(imageSrc2UnsafeAt(texOrigin+vec2(SpriteParameterNum * i + 3, 0)/imageSrcTextureSize()))) * ScreenSize * 100
+                sizeOnScreen := vec2(DecodeFloatRGBA(imageSrc2UnsafeAt(texOrigin+vec2(float(SpriteParameterNum * i + 2), 0)/imageSrcTextureSize())), DecodeFloatRGBA(imageSrc2UnsafeAt(texOrigin+vec2(float(SpriteParameterNum * i + 3), 0)/imageSrcTextureSize()))) * ScreenSize * 100
 
-                distanceToCamera := DecodeFloatRGBA(imageSrc2UnsafeAt(texOrigin+vec2(SpriteParameterNum * i + 4, 0)/imageSrcTextureSize())) * 200
+                distanceToCamera := DecodeFloatRGBA(imageSrc2UnsafeAt(texOrigin+vec2(float(SpriteParameterNum * i + 4), 0)/imageSrcTextureSize())) * 200
 
-                signOfPos := vec2(DecodeFloatRGBA(imageSrc2UnsafeAt(texOrigin+vec2(SpriteParameterNum * i + 5, 0)/imageSrcTextureSize())), DecodeFloatRGBA(imageSrc2UnsafeAt(texOrigin+vec2(SpriteParameterNum * i + 6, 0)/imageSrcTextureSize())))
+                signOfPos := vec2(DecodeFloatRGBA(imageSrc2UnsafeAt(texOrigin+vec2(float(SpriteParameterNum * i + 5), 0)/imageSrcTextureSize())), DecodeFloatRGBA(imageSrc2UnsafeAt(texOrigin+vec2(float(SpriteParameterNum * i + 6), 0)/imageSrcTextureSize())))
 
-                posOnScreen := (vec2(DecodeFloatRGBA(imageSrc2UnsafeAt(texOrigin+vec2(SpriteParameterNum * i, 0)/imageSrcTextureSize())), DecodeFloatRGBA(imageSrc2UnsafeAt(texOrigin+vec2(SpriteParameterNum * i + 1, 0)/imageSrcTextureSize()))) - signOfPos) * ScreenSize
+                posOnScreen := (vec2(DecodeFloatRGBA(imageSrc2UnsafeAt(texOrigin+vec2(float(SpriteParameterNum * i), 0)/imageSrcTextureSize())), DecodeFloatRGBA(imageSrc2UnsafeAt(texOrigin+vec2(float(SpriteParameterNum * i + 1), 0)/imageSrcTextureSize()))) - signOfPos) * ScreenSize
 
-                TexIDBegin := DecodeFloatRGBA(imageSrc2UnsafeAt(texOrigin+vec2(SpriteParameterNum*i+7, 0)/imageSrcTextureSize())) * 255
+                TexIDBegin := DecodeFloatRGBA(imageSrc2UnsafeAt(texOrigin+vec2(float(SpriteParameterNum*i+7), 0)/imageSrcTextureSize())) * 255
 
-                CurrentAnimation := DecodeFloatRGBA(imageSrc2UnsafeAt(texOrigin+vec2(SpriteParameterNum*i+8, 0)/imageSrcTextureSize())) * 255
+                CurrentAnimation := DecodeFloatRGBA(imageSrc2UnsafeAt(texOrigin+vec2(float(SpriteParameterNum*i+8), 0)/imageSrcTextureSize())) * 255
 
                 if distanceToCamera >= 0 && distanceToCamera < squaredEuclidean && position.x > posOnScreen.x && position.x < posOnScreen.x + sizeOnScreen.x && position.y > posOnScreen.y && position.y < posOnScreen.y + sizeOnScreen.y {
 
