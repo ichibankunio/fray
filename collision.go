@@ -79,7 +79,7 @@ func (r *Renderer) castRayMultiHeight(dir, plane vec2.Vec2, pos vec3.Vec3) *Ray 
 	return &Ray{
 		perpWallDist:       perpWallDist,
 		squaredEuclidean:   perpWallDist * perpWallDist * (rayDir.X*rayDir.X + rayDir.Y*rayDir.Y),
-		detectedWallHeight: r.Wld.levelUint8[1][int(mapPos.Y)*r.levelWidth+int(mapPos.X)],
+		detectedWallHeight: r.Wld.HeightMap[int(mapPos.Y)*r.levelWidth+int(mapPos.X)],
 	}
 	// return perpWallDist, r.Wld.levelUint8[1][int(mapPos.Y)*r.Wld.width+int(mapPos.X)]//(当たった壁までの距離, その壁の高さ)
 }
@@ -153,5 +153,5 @@ func (r *Renderer) GetGroundHeight(pos vec3.Vec3) float64 {
 		pos.X = 0
 	}
 
-	return float64(r.Wld.levelUint8[1][int(pos.Y/float64(r.texSize))*r.levelWidth+int(pos.X/float64(r.texSize))]) * float64(r.texSize)
+	return float64(r.Wld.HeightMap[int(pos.Y/float64(r.texSize))*r.levelWidth+int(pos.X/float64(r.texSize))]) * float64(r.texSize)
 }

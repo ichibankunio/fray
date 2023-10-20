@@ -67,8 +67,20 @@ func (c *Camera) GetPlane() vec2.Vec2 {
 	return c.plane
 }
 
+func (c *Camera) GetDir() vec2.Vec2 {
+	return c.dir
+}
+
 func (c *Camera) GetPitch() float32 {
 	return c.pitch
+}
+
+func (c *Camera) SetDafaultDistanceBetweenSubjectCamera(distance float64) {
+	c.distanceBetweenSubjectCamera = distance
+}
+
+func (c *Camera) SetShooterHeight(height float64) {
+	c.shooterHeight = height
 }
 
 func (c *Camera) Init(screenWidth, screenHeight float64) {
@@ -94,11 +106,10 @@ func (c *Camera) Init(screenWidth, screenHeight float64) {
 	c.vZ = -1.0
 	// c.posZ = 0
 
-	c.shooterHeight = 64
+	c.shooterHeight = 128
 	c.shooterRadius = 0.25 //equivalent to 16px
 
 	ebiten.SetCursorMode(ebiten.CursorModeCaptured)
-
 }
 
 // func (c *Camera) Update(g *flib.Game) {

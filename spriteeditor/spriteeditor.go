@@ -11,7 +11,7 @@ type SpriteEditor struct {
 
 func NewSpriteEditor(screenWidth, screenHeight int) *SpriteEditor {
 	return &SpriteEditor{
-		bytes:   make([]uint8, screenWidth*screenHeight*4),	
+		bytes:   make([]uint8, screenWidth*screenHeight*4),
 		texture: ebiten.NewImage(screenWidth, screenHeight),
 	}
 }
@@ -20,17 +20,29 @@ func (se *SpriteEditor) GetTexture() *ebiten.Image {
 	return se.texture
 }
 
-func WriteTexture(dst *ebiten.Image, data []float32)*ebiten.Image {
+func WriteTexture(dst *ebiten.Image, data []float32, offset int) *ebiten.Image {
 	bytes := make([]byte, 4*dst.Bounds().Dx()*dst.Bounds().Dy())
+
+	dst.ReadPixels(bytes)//これ毎フレーム読んでるので重い　修正必要
+
 	for i := 0; i < len(data); i++ {
 		rgba := Float32ToRGBA(data[i])
-		bytes[4*i] = rgba[0]
-		bytes[4*i+1] = rgba[1]
-		bytes[4*i+2] = rgba[2]
-		bytes[4*i+3] = rgba[3]
+		bytes[4*i+offset*4] = rgba[0]
+		bytes[4*i+1+offset*4] = rgba[1]
+		bytes[4*i+2+offset*4] = rgba[2]
+		bytes[4*i+3+offset*4] = rgba[3]
 	}
 
 	dst.WritePixels(bytes)
+
+	// savefile, err := os.Create("./game/texturesheet.png")
+	// if err != nil {
+	// 	fmt.Println("保存するためのファイルが作成できませんでした。")
+	// 	os.Exit(1)
+	// }
+	// defer savefile.Close()
+	// // PNG形式で保存する
+	// png.Encode(savefile, dst)
 
 	return dst
 }

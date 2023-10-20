@@ -18,7 +18,7 @@ type Sprite struct {
 
 	TexIDBegin       int
 	CurrentAnimation int
-	IsVisible bool
+	IsVisible        bool
 }
 
 func (r *Renderer) NewSprite(pos vec2.Vec2, texID int, texIDBegin int, currentAnimation int, isVisible bool) {
@@ -27,7 +27,7 @@ func (r *Renderer) NewSprite(pos vec2.Vec2, texID int, texIDBegin int, currentAn
 		Pos:              vec3.New(pos.X, pos.Y, r.GetGroundHeight(vec3.New(pos.X, pos.Y, 0))+float64(r.texSize)),
 		TexIDBegin:       texIDBegin,
 		CurrentAnimation: currentAnimation,
-		IsVisible: isVisible,
+		IsVisible:        isVisible,
 	}
 
 	r.Wld.Sprites = append(r.Wld.Sprites, s)
@@ -41,7 +41,7 @@ func (r *Renderer) updateSpriteParameters() {
 
 	// fmt.Printf("%f, %f, %f\n", r.Cam.GetPos(), r.Cam.subjectPos, r.Wld.Sprites[0].Pos.Z)
 
-	r.Wld.Sprites[0].Pos = r.Cam.subjectPos
+	// r.Wld.Sprites[0].Pos = r.Cam.subjectPos
 	// r.Wld.Sprites[0].CurrentAnimation =
 	if r.Cam.v.SquaredLength() > 0 {
 		if r.counter%2 == 0 {

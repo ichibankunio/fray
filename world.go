@@ -5,67 +5,68 @@ import (
 )
 
 type World struct {
-	// level    [][]int
-	// level          []float32
-	level      [][]float32
 	levelUint8 [4][]uint8
 
-	// floorLevel     []float32
-	// gridSize       int
+	WorldMap []uint8//texture ID map
+	HeightMap []uint8//height map
+
+	screenWidth int 
+	screenHeight int
+	canvasWidth int
+	canvasHeight int
+	canvasDepth int
+
+	imageSrcBuffer []uint8
+	canvasBuffer []uint8
+
 	topImage *ebiten.Image
-	// baseLightValue float32
-
-	// renderMap     [SCREEN_WIDTH]float32
-	// floorTexture  *ebiten.Image
-	// wallTexture   *ebiten.Image
-	// spriteTexture *ebiten.Image
-
-	// width  int
-	// height int
 
 	Sprites            []*Sprite
 }
 
-func (w *World) Init(screenWidth, screenHeight float64) {
-	// w.width = 10
-	// w.height = 10
+func (w *World) Init(screenWidth int, screenHeight int, canvasWidth int, canvasHeight int, canvasDepth int) {
+	w.imageSrcBuffer = make([]uint8, screenWidth*screenHeight*4)
+	w.HeightMap = make([]uint8, canvasWidth*canvasHeight)
+	w.WorldMap = make([]uint8, canvasDepth*canvasWidth*canvasHeight)
+
+	w.canvasHeight = canvasHeight
+	w.canvasWidth = canvasWidth
+	w.canvasDepth = canvasDepth
+	w.screenHeight = screenHeight
+	w.screenWidth = screenWidth
 }
 
-// func (w *World) NewSprite(pos vec3.Vec3, texID int) {
-// 	if len(w.Sprites) < 3 {
-// 		w.Sprites = append(w.Sprites, &Sprite{
-// 			Pos:              pos,
-// 			ID:               len(w.Sprites),
-// 			TexID:            texID,
-// 			Size:             vec2.New(0, 0),
-// 			DistanceToCamera: 0,
-// 			PosOnScreen:      vec2.New(0, 0),
-// 		})
-// 	}
+func (w *World) GetValue(x, y, z int) uint8 {
+	return w.WorldMap[z*w.canvasWidth*w.canvasHeight + y*w.canvasWidth+x]
+}
 
-// }
+func (w *World) GetHeight(x, y int) uint8 {
+	return w.HeightMap[y*w.canvasWidth+x]
+}
 
-// func (w *World) NewTopView() {
-// 	w.topImage = ebiten.NewImage(w.texSize*w.width, w.texSize*w.height)
-// 	grid1 := ebiten.NewImage(w.texSize-2, w.texSize-2)
-// 	grid1.Fill(color.RGBA{120, 120, 255, 120})
-// 	grid2 := ebiten.NewImage(w.texSize-2, w.texSize-2)
-// 	grid2.Fill(color.RGBA{120, 120, 120, 120})
+func (w *World) SetValue(x, y, z int, value uint8) {
+	w.WorldMap[z*w.canvasWidth*w.canvasHeight + y*w.canvasWidth+x] = value
+	if z > int(w.HeightMap[y*w.canvasWidth+x]) {
+		w.HeightMap[y*w.canvasWidth+x] = uint8(z)
+	}
 
-// 	for y := 0; y < w.height; y++ {
-// 		for x := 0; x < w.width; x++ {
-// 			op := &ebiten.DrawImageOptions{}
-// 			op.GeoM.Translate(float64(x*w.texSize+1), float64(y*w.texSize+1))
-// 			switch w.level[0][y*w.width+x] {
-// 			case 0:
-// 				w.topImage.DrawImage(grid2, op)
-// 			case 1:
-// 				w.topImage.DrawImage(grid1, op)
-// 			}
-// 		}
-// 	}
+	// me.bytes[4*(y*me.canvas.Bounds().Dx()+x)+layer] = value
 
-// }
+	// me.canvas.WritePixels(me.bytes)
+
+	// op := &ebiten.DrawImageOptions{}
+	// me.texture.DrawImage(me.canvas, op)
+}
+
+func (w *World) GenerateWorldMapFromHeightMap() {
+	for i := 0; i < len(w.HeightMap); i++ {
+		for j := 0; j < int(w.HeightMap[i]); j++ {
+			w.WorldMap[j*w.canvasWidth*w.canvasHeight + i] = 1
+		}
+	}
+}
+
+
 
 
 func (w *World) DrawTopView(screen *ebiten.Image) {
