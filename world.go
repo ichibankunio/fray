@@ -1,33 +1,40 @@
 package fray
 
 import (
+	"fmt"
+	"image/png"
+	"os"
+
 	"github.com/hajimehoshi/ebiten/v2"
 )
 
 type World struct {
 	levelUint8 [4][]uint8
 
-	WorldMap []uint8//texture ID map
-	HeightMap []uint8//height map
+	WorldMap  [][]uint8 //texture ID map
+	HeightMap []uint8   //height map
 
-	screenWidth int 
+	screenWidth  int
 	screenHeight int
-	canvasWidth int
+	canvasWidth  int
 	canvasHeight int
-	canvasDepth int
+	canvasDepth  int
 
 	imageSrcBuffer []uint8
-	canvasBuffer []uint8
+	canvasBuffer   []uint8
 
 	topImage *ebiten.Image
 
-	Sprites            []*Sprite
+	Sprites []*Sprite
 }
 
 func (w *World) Init(screenWidth int, screenHeight int, canvasWidth int, canvasHeight int, canvasDepth int) {
 	w.imageSrcBuffer = make([]uint8, screenWidth*screenHeight*4)
 	w.HeightMap = make([]uint8, canvasWidth*canvasHeight)
-	w.WorldMap = make([]uint8, canvasDepth*canvasWidth*canvasHeight)
+	w.WorldMap = make([][]uint8, canvasDepth)
+	for i := 0; i < canvasDepth; i++ {
+		w.WorldMap[i] = make([]uint8, canvasWidth*canvasHeight)
+	}
 
 	w.canvasHeight = canvasHeight
 	w.canvasWidth = canvasWidth
@@ -37,7 +44,7 @@ func (w *World) Init(screenWidth int, screenHeight int, canvasWidth int, canvasH
 }
 
 func (w *World) GetValue(x, y, z int) uint8 {
-	return w.WorldMap[z*w.canvasWidth*w.canvasHeight + y*w.canvasWidth+x]
+	return w.WorldMap[z][y*w.canvasWidth+x]
 }
 
 func (w *World) GetHeight(x, y int) uint8 {
@@ -45,10 +52,12 @@ func (w *World) GetHeight(x, y int) uint8 {
 }
 
 func (w *World) SetValue(x, y, z int, value uint8) {
-	w.WorldMap[z*w.canvasWidth*w.canvasHeight + y*w.canvasWidth+x] = value
+	w.WorldMap[z][y*w.canvasWidth+x] = value
 	if z > int(w.HeightMap[y*w.canvasWidth+x]) {
 		w.HeightMap[y*w.canvasWidth+x] = uint8(z)
 	}
+
+
 
 	// me.bytes[4*(y*me.canvas.Bounds().Dx()+x)+layer] = value
 
@@ -58,16 +67,64 @@ func (w *World) SetValue(x, y, z int, value uint8) {
 	// me.texture.DrawImage(me.canvas, op)
 }
 
-func (w *World) GenerateWorldMapFromHeightMap() {
-	for i := 0; i < len(w.HeightMap); i++ {
-		for j := 0; j < int(w.HeightMap[i]); j++ {
-			w.WorldMap[j*w.canvasWidth*w.canvasHeight + i] = 1
+func (w *World) WriteWorldMapFromHeightMap() {
+	// for i := 0; i < len(w.WorldMap); i++ {
+	// 	for j := 0; j < int(w.HeightMap[i]); j++ {
+	// 		w.WorldMap[j][i] = 1
+	// 	}
+	// }
+
+	for i := 0; i < len(w.WorldMap); i++ { //レイヤーの数
+		for j := 0; j < len(w.WorldMap[0]); j++ { //長さ128*128のスライス
+			// if j > 4 * 65 {
+			// 	continue
+			// }
+
+			// if w.HeightMap[j] > uint8(i) {
+			// 	if j % 4 == 0 {
+			// 		w.WorldMap[i][j] = 255
+			// 	}else {
+			// 		w.WorldMap[i][j] = 1
+			// 	}
+			// }
+			if w.HeightMap[j] > uint8(i) {
+				// if j % 4 == 0 {
+				// 	w.WorldMap[i][j] = 1
+				// }else if j % 4 == 1 {
+				// 	w.WorldMap[i][j] = 0
+				// }else if j % 4 == 2 {
+				// 	w.WorldMap[i][j] = 0
+				// }else if j % 4 == 3 {
+				// 	w.WorldMap[i][j] = 255
+				// }
+				if j%4 == 3 { //alpha must be larger than r, g, and b
+					// w.WorldMap[i][j] = uint8(255 - 1)
+					w.WorldMap[i][j] = 1
+				} else {
+					w.WorldMap[i][j] = 1
+				}
+			}
 		}
 	}
+
+	// for k := 0; k < 100; k++ {
+	// 	println(w.WorldMap[0][k])
+	// }
+
+	img := ebiten.NewImage(w.canvasWidth/2, w.canvasHeight/2)
+	img.WritePixels(w.WorldMap[0])
+	// r, g, b, a := img.At(0, 2).RGBA()
+	// println(uint8(r), uint8(g), uint8(b), uint8(a))
+	// println(r, g, b, a)
+	savefile, err := os.Create("1stLayer.png")
+	if err != nil {
+		fmt.Println("保存するためのファイルが作成できませんでした。")
+		os.Exit(1)
+	}
+	defer savefile.Close()
+	// PNG形式で保存する
+	png.Encode(savefile, img)
 }
-
-
-
 
 func (w *World) DrawTopView(screen *ebiten.Image) {
 	op := &ebiten.DrawImageOptions{}
@@ -75,4 +132,3 @@ func (w *World) DrawTopView(screen *ebiten.Image) {
 	op.GeoM.Translate(0, 0)
 	screen.DrawImage(w.topImage, op)
 }
-

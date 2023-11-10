@@ -15,6 +15,7 @@ var SpriteParameterNum int
 
 var TexSize float//single wall/floor/sprite size in px
 var ScreenSize vec2
+var WorldSize vec2
 // var PlayerAnimationIndex float
 
 //imageSrc0 = sprite texture
@@ -51,8 +52,8 @@ func Fragment(dstPos vec4, srcPos vec2, color vec4) vec4 {
 
 
     lineHeight := 0.0
-    // rayHeight := imageSrc3UnsafeAt(texOrigin + mapPos).g * 255
-    rayHeight := imageSrc1UnsafeAt(texOrigin + mapPos).a * 255//ray's initial height = ground height at camera's position
+    // wallHeightAtRayPosition := imageSrc3UnsafeAt(texOrigin + mapPos).g * 255
+    wallHeightAtRayPosition := imageSrc1UnsafeAt(texOrigin + mapPos).a * 255//ray's initial height = ground height at camera's position
     spriteBlending := vec4(0)
 
     //DDA algorism
@@ -68,12 +69,12 @@ func Fragment(dstPos vec4, srcPos vec2, color vec4) vec4 {
             side = 1.0
         }
 
-        if mapPos.x < 0 || mapPos.y < 0 {
+        if mapPos.x < 0 || mapPos.y < 0 || mapPos.x > WorldSize.x-1 || mapPos.y > WorldSize.y-1 {
             break
         }
 
-        // if imageSrc3UnsafeAt(texOrigin + mapPos).g * 255 != rayHeight {//g: height map(1~255 uint8)
-        if imageSrc1UnsafeAt(texOrigin + mapPos).a * 255 != rayHeight {//g: height map(1~255 uint8)
+        // if imageSrc3UnsafeAt(texOrigin + mapPos).g * 255 != wallHeightAtRayPosition {//g: height map(1~255 uint8)
+        if imageSrc1UnsafeAt(texOrigin + mapPos).a * 255 != wallHeightAtRayPosition || mapPos.x == 0 || mapPos.x == WorldSize.x-1 || mapPos.y == 0 || mapPos.y == WorldSize.y-1  {//g: height map(1~255 uint8)
 
             perpWallDist = side * (sideDist.y - deltaDist.y) + (1.0 - side) * (sideDist.x - deltaDist.x)
 
@@ -114,26 +115,41 @@ func Fragment(dstPos vec4, srcPos vec2, color vec4) vec4 {
 
             wallX := fract(side * (Pos.x + perpWallDist*rayDir.x) + (1.0 - side) * (Pos.y + perpWallDist*rayDir.y))
 
-            lastRenderedWallTop := ScreenSize.y / perpWallDist * rayHeight
+            lastRenderedWallTop := ScreenSize.y / perpWallDist * wallHeightAtRayPosition
 
 
-            // rayHeight = imageSrc3UnsafeAt(texOrigin + mapPos).g * 255//getting wall height at current ray position
-            rayHeight = imageSrc1UnsafeAt(texOrigin + mapPos).a * 255//getting wall height at current ray position
+            // wallHeightAtRayPosition = imageSrc3UnsafeAt(texOrigin + mapPos).g * 255//getting wall height at current ray position
+            wallHeightAtRayPosition = imageSrc1UnsafeAt(texOrigin + mapPos).a * 255//getting wall height at current ray position
+
+            posOnWorldMap := vec2(mapPos.x + mod(floor(wallHeightAtRayPosition/4), ScreenSize.x / WorldSize.x) * TexSize, mapPos.y + (floor(wallHeightAtRayPosition/4) / (ScreenSize.x / WorldSize.x))*TexSize)
             
-
-            wallTextureID := imageSrc3UnsafeAt(texOrigin + mapPos).r * 255//getting wall texture id to draw(int value [0,255])
-
+            // wallTextureID := imageSrc2UnsafeAt(texOrigin + mapPos).r * 255//getting wall texture id to draw(int value [0,255])
+            
     
-            lineHeight = ScreenSize.y / perpWallDist * rayHeight
+            lineHeight = ScreenSize.y / perpWallDist * wallHeightAtRayPosition
 
             eyeHeight := PosZ * ScreenSize.y / perpWallDist
 
             drawStart := -lineHeight + ScreenSize.y / 2.0 + eyeHeight + Pitch
             drawEnd := ScreenSize.y / 2.0 + eyeHeight + Pitch - lastRenderedWallTop
 
-            if dstPos.y >= drawStart && dstPos.y <= drawEnd {//wall casting
 
-                posOnTexture := vec2((wallX + mod(wallTextureID, ScreenSize.x / TexSize)) * TexSize, fract((dstPos.y - drawStart) / lineHeight * rayHeight) * TexSize)
+            if dstPos.y >= drawStart && dstPos.y <= drawEnd {//wall casting
+                rayHeight := floor((dstPos.y - drawStart) / lineHeight * wallHeightAtRayPosition)//下から何個目のブロックか 
+                texOffset := vec2(mod(rayHeight/4, ScreenSize.x / WorldSize.x), floor((rayHeight/4)/(ScreenSize.x / WorldSize.x)))*TexSize
+
+                var wallTextureID float
+                if int(mod(rayHeight, 4)) == 0 {
+                    wallTextureID = imageSrc2UnsafeAt(texOrigin + texOffset + posOnWorldMap).r * 255//getting wall texture id to draw(int value [0,255])
+                }else if int(mod(rayHeight, 4)) == 1 {
+                    wallTextureID = imageSrc2UnsafeAt(texOrigin + texOffset + posOnWorldMap).g * 255//getting wall texture id to draw(int value [0,255])
+                }else if int(mod(rayHeight, 4)) == 2 {
+                    wallTextureID = imageSrc2UnsafeAt(texOrigin + texOffset + posOnWorldMap).b * 255//getting wall texture id to draw(int value [0,255])
+                }else if int(mod(rayHeight, 4)) == 3 {
+                    wallTextureID = imageSrc2UnsafeAt(texOrigin + texOffset + posOnWorldMap).a * 255//getting wall texture id to draw(int value [0,255])
+                }
+
+                posOnTexture := vec2((wallX + mod(wallTextureID, ScreenSize.x / TexSize)) * TexSize, fract((dstPos.y - drawStart) / lineHeight * wallHeightAtRayPosition) * TexSize)
                 
                 clr := imageSrc1UnsafeAt(texOrigin + posOnTexture)
                 clr = side * vec4(clr.rgb-vec3(0.1), 1) + (1.0 - side) * vec4(clr.rgb, 1.0)
@@ -145,7 +161,6 @@ func Fragment(dstPos vec4, srcPos vec2, color vec4) vec4 {
                 rayHitPos := vec2(mapPos.x + side * wallX + (1.0 - side) * (0.5 - 0.5 * sign(rayDir.x)), mapPos.y + (1.0-side) * wallX + side*((0.5 - 0.5 * sign(rayDir.y))))
 
                 distanceBottomOfWallFromCamera := perpWallDist
-
                 
                 // raycasterPos/imageSrcTextureSize()).g*255 is ground height at current raycaster xy position
                 // offsetZ := ((PosZ-imageSrc3UnsafeAt(texOrigin + raycasterPos).g*255)-0.5)*ScreenSize.y
@@ -157,15 +172,28 @@ func Fragment(dstPos vec4, srcPos vec2, color vec4) vec4 {
 
                 currentFloor := vec2(weight*rayHitPos.x+(1.0-weight)*(Pos.x), weight*rayHitPos.y+(1.0-weight)*Pos.y) //linear interpolation
 
-                floorTextureID := imageSrc3UnsafeAt(texOrigin + currentFloor).b * 255//getting floor texture id to draw(int value [0,255])
+                // floorTextureID := imageSrc3UnsafeAt(texOrigin + currentFloor).b * 255//getting floor texture id to draw(int value [0,255])
+                // texOffset := vec2(mod(rayHeight/4-1, ScreenSize.x / WorldSize.x), floor((rayHeight/4-1)/(ScreenSize.x / WorldSize.x)))*TexSize
+                wallHeightAtRayPosition := imageSrc1UnsafeAt(texOrigin + currentFloor).a * 255
+                texOffset := vec2(mod(wallHeightAtRayPosition/4, ScreenSize.x / WorldSize.x), floor((wallHeightAtRayPosition/4)/(ScreenSize.x / WorldSize.x)))*TexSize
+
+                return vec4(0)
+
+                var floorTextureID float
+                if int(mod(wallHeightAtRayPosition, 4)) == 0 {
+                    floorTextureID = imageSrc2UnsafeAt(texOrigin + texOffset + currentFloor).r * 255//getting wall texture id to draw(int value [0,255])
+                }else if int(mod(wallHeightAtRayPosition, 4)) == 1 {
+                    floorTextureID = imageSrc2UnsafeAt(texOrigin + texOffset + currentFloor).g * 255//getting wall texture id to draw(int value [0,255])
+                }else if int(mod(wallHeightAtRayPosition, 4)) == 2 {
+                    floorTextureID = imageSrc2UnsafeAt(texOrigin + texOffset + currentFloor).b * 255//getting wall texture id to draw(int value [0,255])
+                }else if int(mod(wallHeightAtRayPosition, 4)) == 3 {
+                    floorTextureID = imageSrc2UnsafeAt(texOrigin + texOffset + currentFloor).a * 255//getting wall texture id to draw(int value [0,255])
+                }
 
                 posOnTexture := vec2((fract(currentFloor.x) + mod(floorTextureID, ScreenSize.x / TexSize)) * TexSize, (fract(currentFloor.y)) * TexSize)
 
-
-                // texOrigin, _ := imageSrcRegionOnTexture()
                 clr := imageSrc1UnsafeAt(texOrigin + posOnTexture)
                 return vec4(clr.rgb + (spriteBlending.rgb - clr.rgb) * spriteBlending.a, 1)
-
             }else if dstPos.y < drawStart {//preparation for next floor(top of cube) casting
                 latestHitMapPos := mapPos + unit * 0.01
 

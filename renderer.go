@@ -30,6 +30,9 @@ type Renderer struct {
 	screenWidth  float64
 	screenHeight float64
 
+	canvasWidth int
+	canvasHeight int
+
 	shader  *ebiten.Shader
 	shader2 *ebiten.Shader
 
@@ -37,8 +40,8 @@ type Renderer struct {
 
 	texSize int
 
-	levelWidth  int
-	levelHeight int
+	// levelWidth  int
+	// levelHeight int
 
 	// playerAnimationIndex int
 	counter int
@@ -65,6 +68,9 @@ func (r *Renderer) Init(screenWidth, screenHeight float64, canvasWidth, canvasHe
 
 	r.screenWidth = screenWidth
 	r.screenHeight = screenHeight
+
+	r.canvasWidth = canvasWidth
+	r.canvasHeight = canvasHeight
 
 	var err error
 	r.shader, err = ebiten.NewShader(shaderByte)
@@ -151,11 +157,11 @@ func (r *Renderer) SetShaderFromBytes(b []byte) error {
 // 	r.levelHeight = height
 // }
 
-func (r *Renderer) SetLevelUint8(level [4][]uint8, width, height int) {
-	r.Wld.levelUint8 = level
-	r.levelWidth = width
-	r.levelHeight = height
-}
+// func (r *Renderer) SetLevelUint8(level [4][]uint8, width, height int) {
+// 	r.Wld.levelUint8 = level
+// 	r.levelWidth = width
+// 	r.levelHeight = height
+// }
 
 func (r *Renderer) GetScreenWidth() float64 {
 	return r.screenWidth
@@ -226,6 +232,7 @@ func (r *Renderer) renderWall(screen *ebiten.Image) {
 		"SpriteParameterNum":    r.SpriteParameterNum,
 
 		"TexSize": float32(r.texSize),
+		"WorldSize": []float32{float32(r.Wld.canvasWidth), float32(r.Wld.canvasHeight)},
 	}
 
 	op.Images[0] = r.Textures[0].Src //wall(texture), sprite(texture)

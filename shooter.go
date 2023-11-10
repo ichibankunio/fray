@@ -26,7 +26,6 @@ func (r *Renderer) GetDistanceInterferenceFromSubject() {
 
 		delta = r.Cam.dir.Scale(-r.Cam.distanceBetweenSubjectCamera * (ray.squaredEuclidean))
 
-
 		// hitPosOnMap := ray.hitPosOnMap.Scale(float64(r.texSize))
 		// internalDivisionPoint := vec2.New(/(r.Cam.subjectPos.X + r.Cam.pos.X))
 		// r.Cam.pos = vec3.New(hitPosOnMap.X, hitPosOnMap.Y, r.Cam.subjectPos.Z)
@@ -107,7 +106,7 @@ func (r *Renderer) GetNearestWallDistance(dir, plane vec2.Vec2, pos vec3.Vec3) *
 	return &Ray{
 		perpWallDist:       perpWallDist,
 		squaredEuclidean:   perpWallDist * perpWallDist * (rayDir.X*rayDir.X + rayDir.Y*rayDir.Y),
-		detectedWallHeight: r.Wld.levelUint8[1][int(mapPos.Y)*r.levelWidth+int(mapPos.X)],
+		detectedWallHeight: r.Wld.HeightMap[int(mapPos.Y)*r.canvasWidth+int(mapPos.X)],
 		hitPosOnMap:        mapPos,
 	}
 }
