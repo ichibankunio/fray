@@ -92,8 +92,9 @@ func (r *Renderer) Init(screenWidth, screenHeight float64, canvasWidth, canvasHe
 	r.jumpButton = ui.NewButton("ジャンプ", int(r.screenWidth)-100, 60, 100, 100, bitmapfont.Face, ui.ThemeRect, color.White, color.RGBA{20, 20, 20, 100}, color.RGBA{20, 20, 20, 100})
 
 	r.jumpCounter = 0
-	r.JumpCountMax = 5
+	r.JumpCountMax = 100
 }
+
 
 func (r *Renderer) SetTextures(textures [4]*ImageSrc) {
 	r.Textures = textures
@@ -301,11 +302,6 @@ func (r *Renderer) UpdateCamPosZ() {
 		r.jumpCounter = 0
 	}
 
-	// if r.GetGroundHeight(r.Cam.subjectPos) < r.GetGroundHeight(r.Cam.pos) {
-	// 	r.Cam.pos.Z = r.collisionCheckedDeltaZ(r.Cam.pos, r.Cam.vZ)
-	// }else {
-	// 	r.Cam.pos.Z = r.Cam.subjectPos.Z
-	// }
 	r.Cam.pos.Z = r.Cam.subjectPos.Z
 }
 

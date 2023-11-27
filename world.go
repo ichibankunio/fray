@@ -52,7 +52,7 @@ func (w *World) GetHeight(x, y int) uint8 {
 }
 
 func (w *World) SetValue(x, y, z int, value uint8) {
-	w.WorldMap[z][y*w.canvasWidth+x] = value
+	w.WorldMap[z-1][y*w.canvasWidth+x] = value
 	if z > int(w.HeightMap[y*w.canvasWidth+x]) {
 		w.HeightMap[y*w.canvasWidth+x] = uint8(z)
 	}

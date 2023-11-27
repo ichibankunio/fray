@@ -153,6 +153,55 @@ func (me *MapEditor) WriteWorldMapImage(src [][]uint8) *ebiten.Image {
 }
 
 func (me *MapEditor) PrintWorldMap(src [][]uint8, dst *ebiten.Image) {
+	dst.Clear()
+	canvas := ebiten.NewImage(me.canvasWidth, me.canvasHeight)
+	buffer := make([]uint8, me.canvasWidth*me.canvasHeight*4)
+
+	for i := 0; i < int(math.Ceil(float64(len(src))/4)); i++ {
+		for j := 0; j < len(src[i]); j++ {
+			buffer[4*j] = src[4*i][j]
+			buffer[4*j+1] = src[4*i+1][j]
+			buffer[4*j+2] = src[4*i+2][j]
+			buffer[4*j+3] = src[4*i+3][j]	
+
+			/*
+			if 4*i < len(src) {
+				buffer[4*j] = src[4*i][j]
+			} else {
+				buffer[4*j] = 0
+			}
+
+			if 4*i+1 < len(src) {
+				buffer[4*j+1] = src[4*i+1][j]
+			} else {
+				buffer[4*j+1] = 0
+			}
+			if 4*i+2 < len(src) {
+				buffer[4*j+2] = src[4*i+2][j]
+			} else {
+				buffer[4*j+2] = 0
+			}
+			if 4*i+3 < len(src) {
+				buffer[4*j+3] = src[4*i+3][j]
+			} else {
+				buffer[4*j+3] = 0
+			}
+			*/
+			
+		}
+
+		canvas.WritePixels(buffer)
+		// canvas.Fill(color.Black)
+
+		op := &ebiten.DrawImageOptions{}
+		// println(i%(me.screenWidth/me.canvasWidth)*me.canvasWidth, i/(me.screenWidth/me.canvasWidth)*me.canvasHeight)
+		op.GeoM.Translate(float64(i%(me.screenWidth/me.canvasWidth)*me.canvasWidth), float64(i/(me.screenWidth/me.canvasWidth)*me.canvasHeight))
+		dst.DrawImage(canvas, op)
+	}
+
+}
+
+func (me *MapEditor) PrintWorldMap2(src [][]uint8, dst *ebiten.Image) {
 	for z := 0; z < len(src); z++ {
 		for i := 0; i < len(src[0]); i++ {
 			// me.imageSrcBuffer[z*len(src[0]) + i] = src[z][i]
@@ -237,10 +286,14 @@ func (me *MapEditor) LoadWorldMapFromImage(img *ebiten.Image, dst [][]uint8) {
 func (me *MapEditor) WriteHeightMapImage(src []uint8) *ebiten.Image {
 	dst := ebiten.NewImage(me.canvasWidth, me.canvasHeight)
 	for i := 0; i < len(src); i++ {
-		me.heightMapBuffer[4*i] = src[i]   //どこでもいいけどalphaに保存しておいて取り出す
-		me.heightMapBuffer[4*i+1] = src[i] //どこでもいいけどalphaに保存しておいて取り出す
-		me.heightMapBuffer[4*i+2] = src[i] //どこでもいいけどalphaに保存しておいて取り出す
-		me.heightMapBuffer[4*i+3] = 255    //どこでもいいけどalphaに保存しておいて取り出す
+		me.heightMapBuffer[4*i] = src[i] //どこでもいいけどalphaに保存しておいて取り出す
+		me.heightMapBuffer[4*i+1] = 0 //どこでもいいけどalphaに保存しておいて取り出す
+		me.heightMapBuffer[4*i+2] = 0 //どこでもいいけどalphaに保存しておいて取り出す
+		if src[i] > 0 {
+			me.heightMapBuffer[4*i+3] = 255 //どこでもいいけどalphaに保存しておいて取り出す
+		} else {
+			me.heightMapBuffer[4*i+3] = 0
+		}
 	}
 	dst.WritePixels(me.heightMapBuffer)
 
