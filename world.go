@@ -9,7 +9,7 @@ import (
 )
 
 type World struct {
-	levelUint8 [4][]uint8
+	// levelUint8 [4][]uint8
 
 	WorldMap  [][]uint8 //texture ID map
 	HeightMap []uint8   //height map

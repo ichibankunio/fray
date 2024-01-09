@@ -52,36 +52,37 @@ func (r *Renderer) updateSpriteParameters() {
 	}
 
 	// fmt.Printf("res: %d, %d\n", int(r.Wld.Sprites[0].Pos.X)%r.texSize, int(r.Wld.Sprites[0].Pos.Y)%r.texSize)
-
+	
 	invDet := 1.0 / (r.Cam.plane.X*r.Cam.dir.Y - r.Cam.dir.X*r.Cam.plane.Y) // 1/(ad-bc)
 	for i, spr := range r.Wld.Sprites {
 		relPos := spr.Pos.Sub(r.Cam.pos).Scale(1.0 / float64(r.texSize))
 		transPos := vec2.New(r.Cam.dir.Y*relPos.X-r.Cam.dir.X*relPos.Y, -r.Cam.plane.Y*relPos.X+r.Cam.plane.X*relPos.Y).Scale(invDet)
 		screenX := (r.screenWidth / 2) * (1.0 - transPos.X/transPos.Y)
 
-		// println("vmove:", vMoveScreen)
-
-		// vMoveScreen := (r.Cam.pos.Z - r.GetGroundHeight(r.Cam.pos) - r.Cam.shooterHeight)
-		// println(int(r.Cam.pos.Z - r.GetGroundHeight(r.Cam.pos) - r.Cam.shooterHeight))
-		// offsetByPlayerZ := math.Abs(r.screenHeight/transPos.Y) * (r.Cam.subjectPos.Z - r.GetGroundHeight(r.Cam.subjectPos) - r.Cam.shooterHeight) / float64(r.texSize)
-		offsetByCamZ := math.Abs(r.screenHeight/transPos.Y) * (r.Cam.pos.Z + r.Cam.subjectPos.Z - r.Cam.pos.Z) / float64(r.texSize)
+		// offsetByCamZ := math.Abs(r.screenHeight/transPos.Y) * (r.Cam.pos.Z + r.Cam.subjectPos.Z - r.Cam.pos.Z) / float64(r.texSize)
+		offsetByCamZ := math.Abs(r.screenHeight/transPos.Y) * r.Cam.subjectPos.Z / float64(r.texSize)
 		offsetBySpriteZ := math.Abs(r.screenHeight/transPos.Y) * (spr.Pos.Z - float64(r.texSize)/2) / float64(r.texSize)
 		// 2023/4/1 r.texSize/2を引いてspriteがPosよりも半ブロック分上に描画される問題を仮修正
+
+		// -float64(r.Cam.pitch) * 2/3 /r.screenHeight/float64(r.texSize) = math.Abs(1/(-r.Cam.plane.Y*(r.screenWidth/2-r.Cam.pos.X)+r.Cam.plane.X*(spr.Pos.Y-r.Cam.pos.Y))/invDet)
+		/*
+			if 1/(-r.Cam.plane.Y*(r.screenWidth/2-r.Cam.pos.X)+r.Cam.plane.X*(spr.Pos.Y-r.Cam.pos.Y))/invDet >= 0 {
+				spr.Pos.Y = (-3/2 / float64(r.Cam.pitch) * r.screenHeight * float64(r.texSize) / invDet + r.Cam.plane.Y*(r.screenWidth/2-r.Cam.pos.X))/r.Cam.plane.X + r.Cam.pos.Y
+			}else {
+				spr.Pos.Y = (3/2 / float64(r.Cam.pitch) * r.screenHeight * float64(r.texSize) / invDet - r.Cam.plane.Y*(r.screenWidth/2-r.Cam.pos.X))/r.Cam.plane.X + r.Cam.pos.Y
+			}
+		*/
 
 		//calculate height of the sprite on screen
 		spriteSize := vec2.New(math.Abs(r.screenHeight/transPos.Y), math.Abs(r.screenHeight/transPos.Y))
 		// spriteHeight := math.Abs(SCREEN_HEIGHT / transPos.Y) //using 'transformY' instead of the real distance prevents fisheye
 		// spriteWidth := math.Abs(SCREEN_HEIGHT / transPos.Y)
 
-		// fmt.Printf("spriteSize: x: %f, y: %f\n", spriteSize.X, spriteSize.Y)
-
 		//calculate lowest and highest pixel to fill in current stripe
 		drawStart := vec2.New(-spriteSize.X/2+screenX, -spriteSize.Y/2+r.screenHeight/2+float64(r.Cam.pitch)+offsetByCamZ-offsetBySpriteZ)
 		// drawEnd := vec2.New(spriteWidth/2+screenX, spriteHeight/2+SCREEN_HEIGHT/2)
 
 		spr.Size = spriteSize.Mul(vec2.New(1/(r.screenWidth*100), 1/(r.screenHeight*100))) //0-1に正規化
-
-		// fmt.Printf("decoded: %f\n", spr.Size.Mul(vec2.New(r.screenWidth, r.screenHeight)))
 
 		// spr.Size = spriteSize.Scale(1.0/1000.0) //0-1に正規化
 		spr.DistanceToCamera = float32(relPos.SquaredLength()) / 200.0
@@ -90,7 +91,6 @@ func (r *Renderer) updateSpriteParameters() {
 			spr.PosOnScreen.Y = -0.004
 		}
 
-		// println("transPos.Y" , transPos.Y)
 		if transPos.Y < 0 {
 			// spr.DistanceToCamera = 1.0
 			spr.Size = vec2.New(0, 0)
@@ -131,10 +131,6 @@ func (r *Renderer) updateSpriteParameters() {
 		if spr.PosOnScreen.Y < 0 {
 			signOfPos.Y = 1.0
 		}
-
-		// fmt.Printf("posonscreen: %f\n", spr.PosOnScreen)
-		// fmt.Printf("size: %f\n", spr.Size)
-		// fmt.Printf("signofpos: %f\n", signOfPos)
 
 		data[r.SpriteParameterNum*i] = float32(spr.PosOnScreen.X)
 		data[r.SpriteParameterNum*i+1] = float32(spr.PosOnScreen.Y)

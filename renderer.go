@@ -2,8 +2,10 @@ package fray
 
 import (
 	_ "embed"
+	"fmt"
 	"image"
 	"image/color"
+	"math"
 	"runtime"
 
 	"github.com/hajimehoshi/bitmapfont/v2"
@@ -30,13 +32,16 @@ type Renderer struct {
 	screenWidth  float64
 	screenHeight float64
 
-	canvasWidth int
+	canvasWidth  int
 	canvasHeight int
 
 	shader  *ebiten.Shader
 	shader2 *ebiten.Shader
 
 	Textures [4]*ImageSrc
+
+	aimPos        vec3.Vec3
+	handTextureID int
 
 	texSize int
 
@@ -93,8 +98,15 @@ func (r *Renderer) Init(screenWidth, screenHeight float64, canvasWidth, canvasHe
 
 	r.jumpCounter = 0
 	r.JumpCountMax = 100
+
+	r.aimPos = vec3.New(0, 0, 0)
+
+	r.handTextureID = 0
 }
 
+func (r *Renderer) SetHandTextureID(id int) {
+	r.handTextureID = id
+}
 
 func (r *Renderer) SetTextures(textures [4]*ImageSrc) {
 	r.Textures = textures
@@ -164,6 +176,75 @@ func (r *Renderer) SetShaderFromBytes(b []byte) error {
 // 	r.levelHeight = height
 // }
 
+func (r *Renderer) GetAimPosition() vec3.Vec3 {
+	return r.aimPos
+}
+
+func (r *Renderer) CalculateAimPosition() {
+	// pitch := float64(r.Cam.GetPitch())
+	// println(float64(r.Cam.pitch))
+	fmt.Printf("pitch: %2f\n", float64(r.Cam.pitch))
+	// height := r.Cam.shooterHeight
+	// println(int(height))
+	// invDet := 1.0 / (r.Cam.plane.X*r.Cam.dir.Y - r.Cam.dir.X*r.Cam.plane.Y)
+	// aimDistance := -3 / 2 / (float64(r.Cam.pitch) + r.Cam.shooterHeight) * r.screenHeight * float64(r.texSize) / invDet / 100
+	// aimDistance := (-3/2/(float64(r.Cam.pitch) + r.Cam.shooterHeight)*r.screenHeight*float64(r.texSize)/invDet)
+	// aimDistance /= r.screenHeight
+	// println(aimDistance)
+
+	diffZ := 0.0
+	aimDistance := 0.0
+	for i := 0; i < 3; i++ {
+		aimDistance = -r.screenHeight / -1 * math.Abs((float64(r.Cam.pitch)-diffZ))
+
+		fmt.Printf("i: %d, aimDistance: %.2f, (float64(r.Cam.pitch) + diffZ): %.2f\n", i,  aimDistance, -1 * math.Abs((float64(r.Cam.pitch)-diffZ)))
+	
+		ray := r.castRayMultiHeight(r.Cam.dir, r.Cam.plane, r.Cam.subjectPos.Add(vec3.New(0, 0, -r.Cam.shooterHeight)))
+		//camとaimが同じ高さならOK
+		if ray.detectedWallHeight > 0 && ray.perpWallDist < aimDistance {
+			if r.Cam.subjectPos.Z/float64(r.texSize) == float64(ray.detectedWallHeight) {
+			// if true {
+				fmt.Printf("modified: %.2f -> %.2f\n", aimDistance, ray.perpWallDist)
+				aimDistance = ray.perpWallDist
+				if r.Cam.dir.X < 0 {
+					aimDistance += 0.001
+				}
+				break
+			}else if r.Cam.subjectPos.Z/float64(r.texSize) < float64(ray.detectedWallHeight) {
+				// wallHeightAtRayPosition := r.GetGroundHeight(vec3.NewFromVec2(ray.hitPosOnMap))
+				lineHeight := r.screenHeight / ray.perpWallDist * float64(ray.detectedWallHeight)
+				diffZ = lineHeight/2
+				fmt.Printf("ray.perpWallDist: %.2f, ray.detectedWallHeight: %d, lineHeight: %f\n", ray.perpWallDist, ray.detectedWallHeight, lineHeight)
+
+			}
+
+		}
+	}
+
+	if aimDistance < 0 || math.Abs(aimDistance) > 5 {
+		r.aimPos.X = -1
+		r.aimPos.Y = -1
+		r.aimPos.Z = -1
+		return
+	}
+
+
+	// fmt.Printf("ray.perpWallDist: %.2f, ray.detectedWallHeight: %d\n", ray.perpWallDist, ray.detectedWallHeight)
+
+	playerIsAt := r.Cam.GetSubjectPos().Scale(1 / float64(r.GetTexSize()))
+	dir := vec3.NewFromVec2(r.Cam.GetDir())
+	aimPos := playerIsAt.Add(dir.Scale(aimDistance))
+	r.aimPos.X = math.Floor(aimPos.X)
+	r.aimPos.Y = math.Floor(aimPos.Y)
+	// r.aimPos.Z = float64(r.Wld.GetHeight(int(r.aimPos.X), int(r.aimPos.Y)))
+	// r.aimPos.Z = float64(r.Wld.GetHeight(int(r.aimPos.X), int(r.aimPos.Y)))
+	r.aimPos.Z = math.Floor(r.GetGroundHeight(r.aimPos.Scale(float64(r.texSize)))/float64(r.texSize))
+	
+	
+	
+	// println(r.aimPos.X, r.aimPos.Y, r.aimPos.Z)
+}
+
 func (r *Renderer) GetScreenWidth() float64 {
 	return r.screenWidth
 }
@@ -193,6 +274,8 @@ func (r *Renderer) Update() {
 
 	spriteeditor.WriteTexture(r.Textures[0].Src, r.SpriteParameters, r.Textures[0].Offset)
 
+	r.CalculateAimPosition()
+
 	r.counter++
 }
 
@@ -212,7 +295,7 @@ func (r *Renderer) Draw(screen *ebiten.Image) {
 	// r.Stk.Draw(screen)
 	// screen.DrawImage(r.textures[0], nil)
 
-	r.jumpButton.Draw(screen)
+	// r.jumpButton.Draw(screen)
 }
 
 func (r *Renderer) DrawTopView(screen *ebiten.Image) {
@@ -227,12 +310,15 @@ func (r *Renderer) renderWall(screen *ebiten.Image) {
 		"Dir":        []float32{float32(r.Cam.dir.X), float32(r.Cam.dir.Y)},
 		"Plane":      []float32{float32(r.Cam.plane.X), float32(r.Cam.plane.Y)},
 
-		"PosZ":                  float32(r.Cam.pos.Z / float64(r.texSize)),
-		"Pitch":                 r.Cam.pitch,
-		"SpriteNum":             len(r.Wld.Sprites),
-		"SpriteParameterNum":    r.SpriteParameterNum,
+		"PosZ":               float32(r.Cam.pos.Z / float64(r.texSize)),
+		"Pitch":              r.Cam.pitch,
+		"SpriteNum":          len(r.Wld.Sprites),
+		"SpriteParameterNum": r.SpriteParameterNum,
 
-		"TexSize": float32(r.texSize),
+		"AimPos":        []float32{float32(r.aimPos.X), float32(r.aimPos.Y), float32(r.aimPos.Z)},
+		"HandTextureID": float32(r.handTextureID),
+
+		"TexSize":   float32(r.texSize),
 		"WorldSize": []float32{float32(r.Wld.canvasWidth), float32(r.Wld.canvasHeight)},
 	}
 

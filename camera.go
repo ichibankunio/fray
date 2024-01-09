@@ -23,6 +23,7 @@ type Camera struct {
 	pos        vec3.Vec3
 	subjectPos vec3.Vec3
 
+
 	zoomed bool
 
 	distanceBetweenSubjectCamera float64
@@ -75,12 +76,17 @@ func (c *Camera) GetPitch() float32 {
 	return c.pitch
 }
 
+
 func (c *Camera) SetDafaultDistanceBetweenSubjectCamera(distance float64) {
 	c.distanceBetweenSubjectCamera = distance
 }
 
 func (c *Camera) SetShooterHeight(height float64) {
 	c.shooterHeight = height
+}
+
+func (c *Camera) GetShooterHeight() float64 {
+	return c.shooterHeight
 }
 
 func (c *Camera) Init(screenWidth, screenHeight float64) {

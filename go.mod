@@ -2,6 +2,8 @@ module github.com/ichibankunio/fray
 
 go 1.21.1
 
+replace github.com/ichibankunio/fvec => /Users/ichibankunio/go/src/github.com/ichibankunio/fvec
+
 require (
 	github.com/hajimehoshi/bitmapfont/v2 v2.2.3
 	github.com/hajimehoshi/ebiten/v2 v2.6.1
