@@ -12,6 +12,7 @@ type Ray struct {
 	squaredEuclidean   float64
 	detectedWallHeight uint8
 	hitPosOnMap        vec2.Vec2
+	hitPos             vec3.Vec3
 }
 
 func (r *Renderer) castRayMultiHeight(dir, plane vec2.Vec2, pos vec3.Vec3) *Ray {
@@ -51,7 +52,7 @@ func (r *Renderer) castRayMultiHeight(dir, plane vec2.Vec2, pos vec3.Vec3) *Ray 
 			side = 1.0
 		}
 
-		// fmt.Printf("%f, %d\n", mapPos, int(mapPos.Y)*r.levelWidth+int(mapPos.X))
+		//世界の端に衝突
 		if mapPos.X < 0 || mapPos.Y < 0 || mapPos.X > float64(r.canvasWidth-1) || mapPos.Y > float64(r.canvasHeight-1) {
 			if side == 0 {
 				perpWallDist = sideDist.X - deltaDist.X
@@ -62,13 +63,11 @@ func (r *Renderer) castRayMultiHeight(dir, plane vec2.Vec2, pos vec3.Vec3) *Ray 
 				perpWallDist:       perpWallDist,
 				squaredEuclidean:   perpWallDist * perpWallDist * (rayDir.X*rayDir.X + rayDir.Y*rayDir.Y),
 				detectedWallHeight: 255,
-				hitPosOnMap: mapPos,
+				hitPosOnMap:        mapPos,
 			}
 		}
 
-		// if r.Wld.levelUint8[0][int(mapPos.Y)*r.levelWidth+int(mapPos.X)] >= 1 {
 		if r.Wld.WorldMap[int(pos.Z/float64(r.texSize))][int(mapPos.Y)*r.canvasWidth+int(mapPos.X)] >= 1 {
-			// hit = 1
 			break
 		}
 
@@ -79,16 +78,15 @@ func (r *Renderer) castRayMultiHeight(dir, plane vec2.Vec2, pos vec3.Vec3) *Ray 
 		perpWallDist = sideDist.X - deltaDist.X
 	} else {
 		perpWallDist = sideDist.Y - deltaDist.Y
-
 	}
-	// println((r.Cam.pos.Z / float64(r.Wld.gridSize)), r.Wld.levelUint8[1][int(mapPos.Y)*r.Wld.width+int(mapPos.X)])
 
 	return &Ray{
 		perpWallDist:       perpWallDist,
 		squaredEuclidean:   perpWallDist * perpWallDist * (rayDir.X*rayDir.X + rayDir.Y*rayDir.Y),
 		detectedWallHeight: r.Wld.HeightMap[int(mapPos.Y)*r.canvasWidth+int(mapPos.X)],
-		hitPosOnMap: mapPos,
+		hitPosOnMap:        mapPos,
 	}
+
 	// return perpWallDist, r.Wld.levelUint8[1][int(mapPos.Y)*r.Wld.width+int(mapPos.X)]//(当たった壁までの距離, その壁の高さ)
 }
 

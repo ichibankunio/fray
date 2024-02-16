@@ -142,23 +142,25 @@ func Fragment(dstPos vec4, srcPos vec2, color vec4) vec4 {
             drawStart := -lineHeight + ScreenSize.y / 2.0 + eyeHeight + Pitch
             drawEnd := ScreenSize.y / 2.0 + eyeHeight + Pitch - lastRenderedWallTop
 
-
             if dstPos.y >= drawStart && dstPos.y <= drawEnd {//wall casting
-                rayHeight := floor((drawEnd + lastRenderedWallTop - dstPos.y) / lineHeight * wallHeightAtRayPosition)//下から何個目のブロックか
-                texOffset := vec2(mod(floor(rayHeight/4), ScreenSize.x / WorldSize.x), floor(floor(rayHeight/4)/(ScreenSize.x / WorldSize.x)))*WorldSize.x
+                rayHeight := (drawEnd + lastRenderedWallTop - dstPos.y) / lineHeight * wallHeightAtRayPosition//下から何個目のブロックか
+                rayHeightFloor := floor(rayHeight)
+                // rayHeightFract := fract(rayHeight)
+
+                texOffset := vec2(mod(floor(rayHeightFloor/4), ScreenSize.x / WorldSize.x), floor(floor(rayHeightFloor/4)/(ScreenSize.x / WorldSize.x)))*WorldSize.x
  
                 wallTextureIDFragment := imageSrc2UnsafeAt(texOrigin + texOffset + mapPos) * 255
-                rayHeightMod4 := mod(rayHeight, 4)
+                rayHeightMod4 := mod(rayHeightFloor, 4)
                 wallTextureID := (1-step(0.1, rayHeightMod4)) * wallTextureIDFragment.r + step(1, rayHeightMod4) * (1-step(1.1, rayHeightMod4)) * wallTextureIDFragment.g + step(2, rayHeightMod4) * (1-step(2.1, rayHeightMod4)) * wallTextureIDFragment.b + step(3, rayHeightMod4) * (1-step(3.1, rayHeightMod4)) * wallTextureIDFragment.a
                 /* replaced
                 var wallTextureID float
-                if mod(rayHeight, 4) == 0 {
+                if mod(rayHeightFloor, 4) == 0 {
                     wallTextureID = imageSrc2UnsafeAt(texOrigin + texOffset + mapPos).r * 255//getting wall texture id to draw(int value [0,255])
-                }else if mod(rayHeight, 4) == 1 {
+                }else if mod(rayHeightFloor, 4) == 1 {
                     wallTextureID = imageSrc2UnsafeAt(texOrigin + texOffset + mapPos).g * 255//getting wall texture id to draw(int value [0,255])
-                }else if mod(rayHeight, 4) == 2 {
+                }else if mod(rayHeightFloor, 4) == 2 {
                     wallTextureID = imageSrc2UnsafeAt(texOrigin + texOffset + mapPos).b * 255//getting wall texture id to draw(int value [0,255])
-                }else if mod(rayHeight, 4) == 3 {
+                }else if mod(rayHeightFloor, 4) == 3 {
                     wallTextureID = imageSrc2UnsafeAt(texOrigin + texOffset + mapPos).a * 255//getting wall texture id to draw(int value [0,255])
                 }
                 */
@@ -166,12 +168,14 @@ func Fragment(dstPos vec4, srcPos vec2, color vec4) vec4 {
                 wallY := fract((dstPos.y - drawStart) / lineHeight * wallHeightAtRayPosition)
 
                 //aim(additional block)
-                // if rayHeight == AimPos.z && mapPos == AimPos.xy {
+                // if rayHeightFloor == AimPos.z && mapPos == AimPos.xy {
                 //     wallTextureID = HandTextureID
                 // }
 
                 //aim(block with mark)
-                if rayHeight == AimPos.z-1 && mapPos == AimPos.xy && (wallX < 0.03125 || wallX > 0.96875 || wallY < 0.03125 || wallY > 0.96875) {
+                // if rayHeightFloor == AimPos.z-1 && mapPos == AimPos.xy && (wallX < 0.03125 || wallX > 0.96875 || wallY < 0.03125 || wallY > 0.96875) {
+                if rayHeightFloor == AimPos.z-1 && mapPos == AimPos.xy && (wallX < 0.03125 || wallX > 0.96875 || wallY < 0.03125 || wallY > 0.96875) {
+                // if rayHeightFloor == AimPos.z-1 && mapPos == AimPos.xy && (wallX < 0.03125 || wallX > 0.96875 || wallY < 0.03125 || wallY > 0.96875) && rayHeightFract < 0.01 {
                     discard()
                 }
                 posOnTexture := vec2(wallX + mod(wallTextureID, ScreenSize.x / TexSize), wallY + floor(wallTextureID/(ScreenSize.x / TexSize)))*TexSize
@@ -210,7 +214,8 @@ func Fragment(dstPos vec4, srcPos vec2, color vec4) vec4 {
                 // if mapPos == AimPos.xy && (fract(currentFloor.x) < 0.03125 || fract(currentFloor.y) < 0.03125 || fract(currentFloor.x) > 0.96875 || fract(currentFloor.y) > 0.96875) {
                     discard()
                 }else if wallHeightAtRayPosition == 0 {
-                    return vec4(0.4, 0.4, 0.4, 1)
+                    return vec4(0.4, 0.4, 0.4, 1) //床
+                    // return vec4(1, 0, 0, 1)
                 }
 
                 floorTextureIDFragment := imageSrc2UnsafeAt(texOrigin + texOffset + floor(currentFloor)) * 255
@@ -239,7 +244,6 @@ func Fragment(dstPos vec4, srcPos vec2, color vec4) vec4 {
                 raycasterPos = vec2(latestHitMapPos.x + side * wallX + (1.0 - side) * (0.5 - 0.5 * sign(rayDir.x)), latestHitMapPos.y + (1.0-side) * wallX + side*((0.5 - 0.5 * sign(rayDir.y))))
             }
         }
-
     }
 
     clr := vec4((160.0+128.0*(dstPos.y/ScreenSize.y))/255.0, (216.0+128.0*(dstPos.y/ScreenSize.y))/255.0, (239.0+128.0*(dstPos.y/ScreenSize.y))/255.0, 1) //skyblue
