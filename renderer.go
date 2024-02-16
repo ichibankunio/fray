@@ -210,15 +210,22 @@ func (r *Renderer) CalculateAimPosition() {
 			}
 			r.aimPos.Z = pointedZ
 		}else {//遮蔽物ないとき、aimPos.zはその遮蔽物の高さ
-			r.aimPos.Z = math.Floor(r.GetGroundHeight(r.aimPos.Scale(float64(r.texSize))) / float64(r.texSize))
+			// r.aimPos.Z = math.Floor(r.GetGroundHeight(r.aimPos.Scale(float64(r.texSize))) / float64(r.texSize))
+			r.aimPos.Z = r.Cam.pos.Z/float64(r.texSize) - 1
 			fmt.Println("遮蔽物なし")
-			fmt.Println(origin.Z - r.aimPos.Z*float64(r.texSize))
+			// origin.Z -= float64(r.texSize)
+			// continue
+			
+			fmt.Println("diff: ", origin.Z - r.aimPos.Z*float64(r.texSize), origin.Z, r.aimPos.Z*float64(r.texSize))
+			
 			// additionalDistance := r.screenHeight * (origin.Z - r.aimPos.Z*float64(r.texSize))/float64(r.texSize)
 			// aimDistance += (origin.Z - r.aimPos.Z*float64(r.texSize))/float64(r.texSize)
 			// fmt.Println(additionalDistance)
 		}
 		
 	}
+
+	aimDistance += aimDistance * (origin.Z - r.aimPos.Z*float64(r.texSize))/float64(r.texSize)
 
 	
 
