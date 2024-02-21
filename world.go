@@ -51,11 +51,31 @@ func (w *World) GetHeight(x, y int) uint8 {
 	return w.HeightMap[y*w.canvasWidth+x]
 }
 
-func (w *World) SetValue(x, y, z int, value uint8) {
-	w.WorldMap[z-1][y*w.canvasWidth+x] = value
-	if z > int(w.HeightMap[y*w.canvasWidth+x]) {
-		w.HeightMap[y*w.canvasWidth+x] = uint8(z)
+func (w *World) DeleteValue(x, y, z int) {
+	if z == int(w.HeightMap[y*w.canvasWidth+x]) && z != 0 {
+		fmt.Println("OK", z, int(w.HeightMap[y*w.canvasWidth+x]))
+		w.WorldMap[z-1][y*w.canvasWidth+x] = 0
+		w.HeightMap[y*w.canvasWidth+x] = uint8(z-1)
+	}else {
+		fmt.Println("NG", z ,int(w.HeightMap[y*w.canvasWidth+x]))
 	}
+}
+
+func (w *World) SetValue(x, y, z int, value uint8) {
+	if z-1 == int(w.HeightMap[y*w.canvasWidth+x]) {
+		fmt.Println("OK", z-1, int(w.HeightMap[y*w.canvasWidth+x]))
+		w.WorldMap[z-1][y*w.canvasWidth+x] = value+1
+		if z > int(w.HeightMap[y*w.canvasWidth+x]) {
+			w.HeightMap[y*w.canvasWidth+x] = uint8(z)
+		}
+	}else {
+		fmt.Println("NG", z-1 ,int(w.HeightMap[y*w.canvasWidth+x]))
+	}
+
+	// w.WorldMap[z-1][y*w.canvasWidth+x] = value
+	// if z > int(w.HeightMap[y*w.canvasWidth+x]) {
+	// 	w.HeightMap[y*w.canvasWidth+x] = uint8(z)
+	// }
 
 
 

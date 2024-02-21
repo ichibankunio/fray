@@ -100,7 +100,8 @@ func (me *MapEditor) PrintHeightMapOnAlphaLayer(src []uint8, dst *ebiten.Image) 
 	// png.Encode(savefile, dst)
 }
 
-func (me *MapEditor) WriteWorldMapImage(src [][]uint8) *ebiten.Image {
+func (me *MapEditor) WriteWorldMapImage(worldMap [][]uint8, heightMap []uint8) *ebiten.Image {
+	//math.Ceil(float64(me.canvasDepth)/float64((me.screenWidth/me.canvasWidth)*3))個、canvasを横に並べられる
 	dst := ebiten.NewImage(me.screenWidth, me.canvasHeight*int(math.Ceil(float64(me.canvasDepth)/float64((me.screenWidth/me.canvasWidth)*3))))
 	canvas := ebiten.NewImage(me.canvasWidth, me.canvasHeight)
 	buffer := make([]uint8, me.canvasWidth*me.canvasHeight*4)
@@ -118,26 +119,35 @@ func (me *MapEditor) WriteWorldMapImage(src [][]uint8) *ebiten.Image {
 	// 	op.GeoM.Translate(float64(i%(me.screenWidth/me.canvasWidth)*me.canvasWidth), float64(i/(me.screenWidth/me.canvasWidth)*me.canvasHeight))
 	// 	dst.DrawImage(canvas, op)
 	// }
-	for i := 0; i < int(math.Ceil(float64(len(src))/3)); i++ {
-		for j := 0; j < len(src[i]); j++ {
-			if 3*i < len(src) {
-				buffer[4*j] = src[3*i][j]
+
+	for i := 0; i < int(math.Ceil(float64(len(worldMap))/3)); i++ {
+		for j := 0; j < len(worldMap[i]); j++ {
+			if 3*i < len(worldMap) {
+				buffer[4*j] = worldMap[3*i][j]
+				if worldMap[3*i][j] > 0 {
+					println(worldMap[3*i][j], 3*i, j)
+				}
 			} else {
 				buffer[4*j] = 0
 			}
 
-			if 3*i+1 < len(src) {
-				buffer[4*j+1] = src[3*i+1][j]
+			if 3*i+1 < len(worldMap) {
+				buffer[4*j+1] = worldMap[3*i+1][j]
+				if worldMap[3*i+1][j] > 0 {
+					println(worldMap[3*i+1][j], 3*i+1, j)
+				}
 			} else {
 				buffer[4*j+1] = 0
 			}
-			if 3*i+2 < len(src) {
-				buffer[4*j+2] = src[3*i+2][j]
+			if 3*i+2 < len(worldMap) {
+				buffer[4*j+2] = worldMap[3*i+2][j]
 			} else {
 				buffer[4*j+2] = 0
 			}
 
-			buffer[4*j+3] = (src[3*i][j] / 1) * 255
+			//世界のデータではないけど、画像で出力したときに目に見えるようにするために透明度を設定
+			// buffer[4*j+3] = (worldMap[3*i][j] / 1) * 255
+			buffer[4*j+3] = 255
 		}
 
 		canvas.WritePixels(buffer)
@@ -162,32 +172,32 @@ func (me *MapEditor) PrintWorldMap(src [][]uint8, dst *ebiten.Image) {
 			buffer[4*j] = src[4*i][j]
 			buffer[4*j+1] = src[4*i+1][j]
 			buffer[4*j+2] = src[4*i+2][j]
-			buffer[4*j+3] = src[4*i+3][j]	
+			buffer[4*j+3] = src[4*i+3][j]
 
 			/*
-			if 4*i < len(src) {
-				buffer[4*j] = src[4*i][j]
-			} else {
-				buffer[4*j] = 0
-			}
+				if 4*i < len(src) {
+					buffer[4*j] = src[4*i][j]
+				} else {
+					buffer[4*j] = 0
+				}
 
-			if 4*i+1 < len(src) {
-				buffer[4*j+1] = src[4*i+1][j]
-			} else {
-				buffer[4*j+1] = 0
-			}
-			if 4*i+2 < len(src) {
-				buffer[4*j+2] = src[4*i+2][j]
-			} else {
-				buffer[4*j+2] = 0
-			}
-			if 4*i+3 < len(src) {
-				buffer[4*j+3] = src[4*i+3][j]
-			} else {
-				buffer[4*j+3] = 0
-			}
+				if 4*i+1 < len(src) {
+					buffer[4*j+1] = src[4*i+1][j]
+				} else {
+					buffer[4*j+1] = 0
+				}
+				if 4*i+2 < len(src) {
+					buffer[4*j+2] = src[4*i+2][j]
+				} else {
+					buffer[4*j+2] = 0
+				}
+				if 4*i+3 < len(src) {
+					buffer[4*j+3] = src[4*i+3][j]
+				} else {
+					buffer[4*j+3] = 0
+				}
 			*/
-			
+
 		}
 
 		canvas.WritePixels(buffer)
@@ -287,8 +297,8 @@ func (me *MapEditor) WriteHeightMapImage(src []uint8) *ebiten.Image {
 	dst := ebiten.NewImage(me.canvasWidth, me.canvasHeight)
 	for i := 0; i < len(src); i++ {
 		me.heightMapBuffer[4*i] = src[i] //どこでもいいけどalphaに保存しておいて取り出す
-		me.heightMapBuffer[4*i+1] = 0 //どこでもいいけどalphaに保存しておいて取り出す
-		me.heightMapBuffer[4*i+2] = 0 //どこでもいいけどalphaに保存しておいて取り出す
+		me.heightMapBuffer[4*i+1] = 0    //どこでもいいけどalphaに保存しておいて取り出す
+		me.heightMapBuffer[4*i+2] = 0    //どこでもいいけどalphaに保存しておいて取り出す
 		if src[i] > 0 {
 			me.heightMapBuffer[4*i+3] = 255 //どこでもいいけどalphaに保存しておいて取り出す
 		} else {

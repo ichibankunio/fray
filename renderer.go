@@ -41,6 +41,7 @@ type Renderer struct {
 	Textures [4]*ImageSrc
 
 	aimPos        vec3.Vec3
+	aimDirection  AimDirection
 	handTextureID int
 
 	texSize int
@@ -58,6 +59,16 @@ type Renderer struct {
 	SpriteParameterNum int
 	SpriteParameters   []float32
 }
+
+type AimDirection int
+
+const (
+	AIM_DIR_NORTH AimDirection = iota
+	AIM_DIR_SOUTH
+	AIM_DIR_EAST
+	AIM_DIR_WEST
+	AIM_DIR_TOP
+)
 
 func (r *Renderer) Init(screenWidth, screenHeight float64, canvasWidth, canvasHeight, canvasDepth int, texSize int) {
 	r.Cam = &Camera{}
@@ -180,54 +191,153 @@ func (r *Renderer) GetAimPosition() vec3.Vec3 {
 	return r.aimPos
 }
 
+func (r *Renderer) GetAimDirection() AimDirection {
+	return r.aimDirection
+}
+
+func (r *Renderer) GetAimPositionFromScreen(screen *ebiten.Image) {
+	fragment := screen.At(screen.Bounds().Dx()/2, screen.Bounds().Dy()/2)
+	x, y, z, direction := fragment.RGBA()
+	// fmt.Println(uint8(x), uint8(y), uint8(z), uint8(a))
+
+	r.aimPos.X = float64(uint8(x))
+	r.aimPos.Y = float64(uint8(y))
+	r.aimPos.Z = float64(uint8(z))
+	r.aimDirection = AimDirection(uint8(direction))
+}
+
 func (r *Renderer) CalculateAimPosition() {
 	aimDistance := 0.0
-	origin := r.Cam.subjectPos.Add(vec3.New(0, 0, -float64(r.texSize)))
-	for i := 0; i < 3; i++ {
+	origin := r.Cam.subjectPos.Add(vec3.New(0, 0, -r.Cam.shooterHeight))
+	overallDistance := 0.0
+	for i := 0; i < 1; i++ {
 		fmt.Println("i", i)
-		ray := r.castRayMultiHeight(r.Cam.dir, r.Cam.plane, origin)
-		
-		aimDistance = math.Abs(-r.screenHeight / float64(r.Cam.pitch))
-		
-		fmt.Printf("i: %d, aimDistance: %.2f, detectedWallHeight: %d\n", 0, aimDistance, ray.detectedWallHeight)
+		ray := r.castRayMultiHeight(r.Cam.dir, r.Cam.plane, origin, RAY_HIT_UP)
+
+		//カメラのz座標が128なら128/64 = 2倍aimDistanceを長くする
+		aimDistance = math.Abs(-r.screenHeight/(float64(r.Cam.pitch))) * (1 + ((r.Cam.pos.Z - origin.Z) / float64(r.texSize)))
+
+		fmt.Printf("初期: aimDistance: %.2f, detectedWallHeight: %d, perpWallDist: %.2f\n", aimDistance, ray.detectedWallHeight, ray.perpWallDist)
+
 		if ray.detectedWallHeight > 0 && ray.perpWallDist < aimDistance && aimDistance > 0 { //遮蔽物があればaimPos.x, aimPos.yはより近いところにあるはずなのでaimDistanceをより近いところに
 			aimDistance = ray.perpWallDist
 			if r.Cam.dir.X < 0 || r.Cam.dir.Y < 0 {
 				aimDistance += 0.001
 			}
+			fmt.Printf("近いところに衝突したら: aimDistance: %.2f, detectedWallHeight: %d, perpWallDist: %.2f\n", aimDistance, ray.detectedWallHeight, ray.perpWallDist)
+
 		}
-		
-		if ray.detectedWallHeight > 0 {//遮蔽物があるとき、aimがどの高さのブロックを指しているか(pointedZ=0(基準平面)は常に同じ高さになるようにした)
+
+		if ray.detectedWallHeight > 0 { //遮蔽物があるとき
 			lineHeight := r.screenHeight / ray.perpWallDist * float64(ray.detectedWallHeight)
-			pointedZ := math.Ceil((lineHeight+float64(r.Cam.pitch))/lineHeight*float64(ray.detectedWallHeight)-float64(ray.detectedWallHeight)+1) + (r.Cam.pos.Z - float64(r.texSize))/float64(r.texSize)
+			fmt.Println("lineHeight: ", lineHeight)
+
+			// aimがどの高さのブロックを指しているか(pointedZ=0(基準平面)は常に同じ高さになるようにした)
+			pointedZ := math.Ceil((lineHeight+float64(r.Cam.pitch))/lineHeight*float64(ray.detectedWallHeight)-float64(ray.detectedWallHeight)+1) + (r.Cam.pos.Z-float64(r.texSize))/float64(r.texSize)
+
 			fmt.Println("pointedZ: ", pointedZ)
+
 			if pointedZ > float64(ray.detectedWallHeight) {
-				fmt.Println("高すぎ！")
+				fmt.Println("高すぎ")
+				/*
+					aimDistance = math.Abs(-r.screenHeight / (float64(r.Cam.pitch))) * (1 + ((r.Cam.pos.Z - float64(ray.detectedWallHeight) * float64(r.texSize) - float64(r.texSize)) / float64(r.texSize)))
+					fmt.Println("aimDistance: ", aimDistance)
+
+
+					hitPos := vec2.New(origin.X + r.Cam.dir.X*aimDistance*float64(r.texSize), origin.Y + r.Cam.dir.Y*aimDistance*float64(r.texSize)).Scale(1/float64(r.texSize)).Floor()
+					r.aimPos.X = hitPos.X
+					r.aimPos.Y = hitPos.Y
+					fmt.Println("hitPos: ", hitPos)
+
+					r.aimPos.Z = float64(r.Wld.HeightMap[int(hitPos.Y)*r.canvasWidth+int(hitPos.X)])
+					fmt.Println("r.aimPos.Z: ", r.aimPos.Z, "ray.detectedWallHeight", ray.detectedWallHeight)
+					if r.aimPos.Z != float64(ray.detectedWallHeight) {
+
+						fmt.Println("無効")
+						r.aimPos.X = -1
+						r.aimPos.Y = -1
+						r.aimPos.Z = -1
+						return
+					}
+					fmt.Println("hitPos: ", hitPos, "r.aimPos.Z: ", r.aimPos.Z)
+					return
+				*/
+
 				origin.Z = float64(ray.detectedWallHeight) * float64(r.texSize)
-				continue
-			}else if pointedZ <= 0 {
-				fmt.Println("低すぎ！")
+				origin.X = ray.hitPos.X
+				origin.Y = ray.hitPos.Y
+				ray2 := r.castRayMultiHeight(r.Cam.dir, r.Cam.plane, origin, RAY_HIT_UP)
+				fmt.Println("ray2.detectedwallHeight", ray2.detectedWallHeight)
+
+				aimDistance = math.Abs(-r.screenHeight/(float64(r.Cam.pitch))) * (1 + ((r.Cam.pos.Z - float64(ray.detectedWallHeight)*float64(r.texSize) - float64(r.texSize)) / float64(r.texSize)))
+				fmt.Println("aimDistance: ", aimDistance)
+				// if ray2.detectedWallHeight > ray.detectedWallHeight {
+				// }
+
+				//aimDistanceからaimPos.xyを決定
+				playerIsAt := r.Cam.GetSubjectPos().Scale(1 / float64(r.GetTexSize()))
+				dir := vec3.NewFromVec2(r.Cam.GetDir())
+				aimPos := playerIsAt.Add(dir.Scale(aimDistance))
+				r.aimPos.X = math.Floor(aimPos.X)
+				r.aimPos.Y = math.Floor(aimPos.Y)
+				if aimDistance > ray2.perpWallDist+ray.perpWallDist {
+					r.aimPos.Z = float64(ray2.detectedWallHeight)
+				}
+				println(int(r.aimPos.X), int(r.aimPos.Y), int(r.aimPos.Z), "----------------------------")
+
+				return
+
+			} else if pointedZ <= 0 {
+				fmt.Println("低すぎ")
+				// origin.Z = float64(ray.detectedWallHeight) * float64(r.texSize)
+				// continue
+				r.aimPos.Z = 0
+				// aimDistance = math.Abs(-r.screenHeight / (float64(r.Cam.pitch)))
+				aimDistance = math.Abs(-r.screenHeight/(float64(r.Cam.pitch))) * (1 + ((r.Cam.pos.Z - origin.Z - float64(r.texSize)) / float64(r.texSize)))
+
+				// aimDistance += aimDistance * (origin.Z - r.aimPos.Z*float64(r.texSize)) / float64(r.texSize)
+				fmt.Println("aimDistance: ", aimDistance)
+				playerIsAt := r.Cam.GetSubjectPos().Scale(1 / float64(r.GetTexSize()))
+				dir := vec3.NewFromVec2(r.Cam.GetDir())
+				aimPos := playerIsAt.Add(dir.Scale(aimDistance))
+				r.aimPos.X = math.Floor(aimPos.X)
+				r.aimPos.Y = math.Floor(aimPos.Y)
+				fmt.Println("r.aimPos: ", r.aimPos)
+				return
+
+			} else {
+				r.aimPos.Z = pointedZ
+
+				break
 			}
-			r.aimPos.Z = pointedZ
-		}else {//遮蔽物ないとき、aimPos.zはその遮蔽物の高さ
+		} else { //遮蔽物ないとき1(= aimが床を直接指すとき)、aimPos.zはその遮蔽物の高さ
 			// r.aimPos.Z = math.Floor(r.GetGroundHeight(r.aimPos.Scale(float64(r.texSize))) / float64(r.texSize))
-			r.aimPos.Z = r.Cam.pos.Z/float64(r.texSize) - 1
+			// r.aimPos.Z = r.Cam.pos.Z/float64(r.texSize) - 1
+			// r.aimPos.Z = 0
+			downRay := r.castRayMultiHeight(r.Cam.dir, r.Cam.plane, origin, RAY_HIT_DOWN)
+			fmt.Printf("downRay.perpwalldist: %.2f, downray.detectedwallHeight: %d\n", downRay.perpWallDist, downRay.detectedWallHeight)
+			if overallDistance+downRay.perpWallDist < aimDistance {
+				r.aimPos.Z = float64(r.Wld.HeightMap[int(downRay.hitPosOnMap.Y)*r.canvasWidth+int(downRay.hitPosOnMap.X)]) * float64(r.texSize)
+				fmt.Println("降りる")
+			} else {
+				r.aimPos.Z = origin.Z / float64(r.texSize)
+				fmt.Println("フラット")
+			}
 			fmt.Println("遮蔽物なし")
 			// origin.Z -= float64(r.texSize)
 			// continue
-			
-			fmt.Println("diff: ", origin.Z - r.aimPos.Z*float64(r.texSize), origin.Z, r.aimPos.Z*float64(r.texSize))
-			
+
+			fmt.Println("diff: ", origin.Z-r.aimPos.Z*float64(r.texSize), origin.Z, r.aimPos.Z*float64(r.texSize))
+
 			// additionalDistance := r.screenHeight * (origin.Z - r.aimPos.Z*float64(r.texSize))/float64(r.texSize)
 			// aimDistance += (origin.Z - r.aimPos.Z*float64(r.texSize))/float64(r.texSize)
 			// fmt.Println(additionalDistance)
+
+			//aimDistanceを伸ばす(相似な図形の考え方)
+			aimDistance += aimDistance * (origin.Z - r.aimPos.Z*float64(r.texSize)) / float64(r.texSize)
 		}
-		
+
 	}
-
-	aimDistance += aimDistance * (origin.Z - r.aimPos.Z*float64(r.texSize))/float64(r.texSize)
-
-	
 
 	//aimが遠すぎるところを指していたら無効とする
 	if aimDistance < 0 || math.Abs(aimDistance) > 5 {
@@ -236,7 +346,7 @@ func (r *Renderer) CalculateAimPosition() {
 		r.aimPos.Z = -1
 		return
 	}
-	
+
 	//aimDistanceからaimPos.xyを決定
 	playerIsAt := r.Cam.GetSubjectPos().Scale(1 / float64(r.GetTexSize()))
 	dir := vec3.NewFromVec2(r.Cam.GetDir())
@@ -244,8 +354,8 @@ func (r *Renderer) CalculateAimPosition() {
 	r.aimPos.X = math.Floor(aimPos.X)
 	r.aimPos.Y = math.Floor(aimPos.Y)
 
-	println(int(r.aimPos.X), int(r.aimPos.Y), int(r.aimPos.Z))
-	
+	println(int(r.aimPos.X), int(r.aimPos.Y), int(r.aimPos.Z), "----------------------------")
+
 }
 
 func (r *Renderer) GetScreenWidth() float64 {
@@ -277,13 +387,16 @@ func (r *Renderer) Update() {
 
 	spriteeditor.WriteTexture(r.Textures[0].Src, r.SpriteParameters, r.Textures[0].Offset)
 
-	r.CalculateAimPosition()
+	// r.CalculateAimPosition()
 
 	r.counter++
 }
 
 func (r *Renderer) Draw(screen *ebiten.Image) {
 	r.renderWall(screen)
+
+	r.GetAimPositionFromScreen(screen)
+
 	// r.renderWithNoTextures(screen)
 
 	// r.Wld.DrawTopView(screen)
@@ -320,9 +433,8 @@ func (r *Renderer) renderWall(screen *ebiten.Image) {
 
 		"AimPos":        []float32{float32(r.aimPos.X), float32(r.aimPos.Y), float32(r.aimPos.Z)},
 		"HandTextureID": float32(r.handTextureID),
-
-		"TexSize":   float32(r.texSize),
-		"WorldSize": []float32{float32(r.Wld.canvasWidth), float32(r.Wld.canvasHeight)},
+		"TexSize":       float32(r.texSize),
+		"WorldSize":     []float32{float32(r.Wld.canvasWidth), float32(r.Wld.canvasHeight)},
 	}
 
 	op.Images[0] = r.Textures[0].Src //wall(texture), sprite(texture)
@@ -335,12 +447,12 @@ func (r *Renderer) renderWall(screen *ebiten.Image) {
 func (r *Renderer) UpdateCamPos(playerPos vec3.Vec3) {
 	// delta := vec3.New(0, 0, 0)
 	r.Cam.v = vec3.New(0, 0, 0)
-	if ebiten.IsKeyPressed(ebiten.KeyW) || ebiten.IsKeyPressed(ebiten.KeyUp) || r.Stk.Input[0] == STICK_UP {
+	if ebiten.IsKeyPressed(ebiten.KeyW) || r.Stk.Input[0] == STICK_UP {
 		// if ebiten.IsKeyPressed(ebiten.KeyW) || ebiten.IsKeyPressed(ebiten.KeyUp) || ebiten.GamepadAxisValue(0, 1) < -0.1 || r.Stk.Input[0] == STICK_UP {
 		r.Cam.v = r.collisionCheckedDelta(playerPos, r.Cam.dir.Scale(r.Cam.Speed), r.Cam.collisionDistance)
 
 		// r.Cam.pos = r.GetValidPos(r.Cam.por.X + r.Cam.dir.X*v, r.Cam.por.Y + r.Cam.dir.Y*v)
-	} else if ebiten.IsKeyPressed(ebiten.KeyS) || ebiten.IsKeyPressed(ebiten.KeyDown) || r.Stk.Input[0] == STICK_DOWN {
+	} else if ebiten.IsKeyPressed(ebiten.KeyS) || r.Stk.Input[0] == STICK_DOWN {
 		// } else if ebiten.IsKeyPressed(ebiten.KeyS) || ebiten.IsKeyPressed(ebiten.KeyDown) || ebiten.GamepadAxisValue(0, 1) > 0.1 || r.Stk.Input[0] == STICK_DOWN {
 		r.Cam.v = r.collisionCheckedDelta(playerPos, r.Cam.dir.Scale(-r.Cam.Speed), r.Cam.collisionDistance)
 		// r.Cam.pos = r.Cam.pos.Add(delta)
@@ -374,7 +486,7 @@ func (r *Renderer) UpdateCamPosZ() {
 	// if inpututil.IsKeyJustReleased(ebiten.KeySpace) || flib.IsThereJustReleasedTouch(r.jumpButton.Spr.Pos, vec2.New(float64(r.jumpButton.Spr.Img.Bounds().Dx()), float64(r.jumpButton.Spr.Img.Bounds().Dy()))) {
 	// if (inpututil.IsKeyJustReleased(ebiten.KeySpace) || flib.IsThereJustReleasedTouch(r.jumpButton.Spr.Pos, vec2.New(100, 100))) && r.Cam.subjectPos.Z - (r.GetGroundHeight(r.Cam.subjectPos)+r.Cam.shooterHeight) == 0 {
 	if (inpututil.IsKeyJustReleased(ebiten.KeySpace) || flib.IsThereJustReleasedTouch(r.jumpButton.Spr.Pos, vec2.New(100, 100))) && r.jumpCounter < r.JumpCountMax {
-		r.Cam.vZ = 4
+		r.Cam.vZ = 6
 		r.jumpCounter++
 	}
 

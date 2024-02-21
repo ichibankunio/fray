@@ -1,5 +1,5 @@
 package fray 
 
 const (
-	GRAVITY = -0.1
+	GRAVITY = -0.2
 )
