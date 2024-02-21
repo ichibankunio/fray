@@ -18,12 +18,11 @@ type SandboxManager struct {
 	MapEditor *mapeditor.MapEditor
 	UIManager *ui.UIManager
 
-	Hotbar *SandboxHotbar
+	HandTextureID int
 }
 
 func (sm *SandboxManager) Init() {
-	sm.Hotbar = &SandboxHotbar{}
-	sm.Hotbar.Selected = 0
+	sm.HandTextureID = 0
 
 	sm.Renderer = &fray.Renderer{}
 	sm.MapEditor = &mapeditor.MapEditor{}
@@ -100,15 +99,15 @@ func (sm *SandboxManager) UpdateMapEdit() {
 	if inpututil.IsMouseButtonJustPressed(ebiten.MouseButtonRight) { //左クリック: 置く
 		switch sm.Renderer.GetAimDirection() {
 		case fray.AIM_DIR_NORTH:
-			sm.Renderer.Wld.SetValue(x, y-1, z, uint8(sm.Hotbar.Selected))
+			sm.Renderer.Wld.SetValue(x, y-1, z, uint8(sm.HandTextureID))
 		case fray.AIM_DIR_SOUTH:
-			sm.Renderer.Wld.SetValue(x, y+1, z, uint8(sm.Hotbar.Selected))
+			sm.Renderer.Wld.SetValue(x, y+1, z, uint8(sm.HandTextureID))
 		case fray.AIM_DIR_EAST:
-			sm.Renderer.Wld.SetValue(x-1, y, z, uint8(sm.Hotbar.Selected))
+			sm.Renderer.Wld.SetValue(x-1, y, z, uint8(sm.HandTextureID))
 		case fray.AIM_DIR_WEST:
-			sm.Renderer.Wld.SetValue(x+1, y, z, uint8(sm.Hotbar.Selected))
+			sm.Renderer.Wld.SetValue(x+1, y, z, uint8(sm.HandTextureID))
 		case fray.AIM_DIR_TOP:
-			sm.Renderer.Wld.SetValue(x, y, z+1, uint8(sm.Hotbar.Selected))
+			sm.Renderer.Wld.SetValue(x, y, z+1, uint8(sm.HandTextureID))
 		}
 
 		sm.MapEditor.PrintHeightMapOnAlphaLayer(sm.Renderer.Wld.HeightMap, sm.Renderer.Textures[1].Src)
@@ -123,7 +122,7 @@ func (sm *SandboxManager) UpdateMapEdit() {
 func (sm *SandboxManager) Update() error {
 	sm.Renderer.Update()
 
-	sm.Renderer.SetHandTextureID(sm.Hotbar.Selected)
+	sm.Renderer.SetHandTextureID(sm.HandTextureID)
 	sm.UpdateMapEdit()
 
 	if inpututil.IsKeyJustPressed(ebiten.KeyK) {
