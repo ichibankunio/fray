@@ -6,7 +6,7 @@ replace github.com/ichibankunio/fvec => /Users/ichibankunio/go/src/github.com/ic
 
 require (
 	github.com/hajimehoshi/bitmapfont/v2 v2.2.3
-	github.com/hajimehoshi/ebiten/v2 v2.6.1
+	github.com/hajimehoshi/ebiten/v2 v2.6.6
 	github.com/ichibankunio/flib v1.1.2
 	github.com/ichibankunio/fvec v0.2.0
 	golang.org/x/image v0.12.0
@@ -14,7 +14,7 @@ require (
 
 require (
 	github.com/ebitengine/oto/v3 v3.2.0-alpha.0.20230922145042-f23f64c6fc49 // indirect
-	github.com/ebitengine/purego v0.6.0-alpha.0.20230922114835-67367cee67ef // indirect
+	github.com/ebitengine/purego v0.6.0 // indirect
 	github.com/fogleman/gg v1.3.0 // indirect
 	github.com/golang/freetype v0.0.0-20170609003504-e2365dfdc4a0 // indirect
 	github.com/hajimehoshi/go-mp3 v0.3.4 // indirect
