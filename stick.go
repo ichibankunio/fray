@@ -8,18 +8,17 @@ import (
 	"github.com/hajimehoshi/ebiten/v2/ebitenutil"
 	"github.com/hajimehoshi/ebiten/v2/inpututil"
 	"github.com/ichibankunio/fvec/vec2"
-
 )
 
 type Stick struct {
 	// pos     vec2.Vec2
-	visible  [2]bool
-	img      *ebiten.Image
-	Input    [2]stickDirection
-	touchIDs [2]ebiten.TouchID
-	pos      [2]vec2.Vec2
-	isMobile bool
-	screenWidth float64
+	visible      [2]bool
+	img          *ebiten.Image
+	Input        [2]stickDirection
+	touchIDs     [2]ebiten.TouchID
+	pos          [2]vec2.Vec2
+	isMobile     bool
+	screenWidth  float64
 	screenHeight float64
 
 	mousePosLastFrame vec2.Vec2
@@ -58,8 +57,6 @@ func (s *Stick) Init(screenWidth, screenHeight float64) {
 	ebitenutil.DrawCircle(s.img, float64(s.img.Bounds().Dx()/2), float64(s.img.Bounds().Dy()/2), float64(s.img.Bounds().Dx()/2), color.RGBA{200, 200, 200, 100})
 	// s.img.Fill(color.RGBA{200, 200, 200, 50})
 }
-
-
 
 func (s *Stick) update() {
 	if len(inpututil.AppendJustPressedTouchIDs(nil)) > 0 {

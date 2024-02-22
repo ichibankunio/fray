@@ -42,7 +42,7 @@ type Renderer struct {
 
 	aimPos        vec3.Vec3
 	aimDirection  AimDirection
-	handTextureID int
+	HandTextureID int
 
 	texSize int
 
@@ -112,11 +112,11 @@ func (r *Renderer) Init(screenWidth, screenHeight float64, canvasWidth, canvasHe
 
 	r.aimPos = vec3.New(0, 0, 0)
 
-	r.handTextureID = 0
+	r.HandTextureID = 0
 }
 
 func (r *Renderer) SetHandTextureID(id int) {
-	r.handTextureID = id
+	r.HandTextureID = id
 }
 
 func (r *Renderer) SetTextures(textures [4]*ImageSrc) {
@@ -432,7 +432,7 @@ func (r *Renderer) renderWall(screen *ebiten.Image) {
 		"SpriteParameterNum": r.SpriteParameterNum,
 
 		"AimPos":        []float32{float32(r.aimPos.X), float32(r.aimPos.Y), float32(r.aimPos.Z)},
-		"HandTextureID": float32(r.handTextureID),
+		"HandTextureID": float32(r.HandTextureID),
 		"TexSize":       float32(r.texSize),
 		"WorldSize":     []float32{float32(r.Wld.canvasWidth), float32(r.Wld.canvasHeight)},
 	}
