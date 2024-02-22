@@ -17,13 +17,9 @@ type SandboxManager struct {
 	Renderer  *fray.Renderer
 	MapEditor *mapeditor.MapEditor
 	UIManager *ui.UIManager
-
-	HandTextureID int
 }
 
 func (sm *SandboxManager) Init() {
-	sm.HandTextureID = 0
-
 	sm.Renderer = &fray.Renderer{}
 	sm.MapEditor = &mapeditor.MapEditor{}
 	sm.UIManager = &ui.UIManager{}
@@ -86,10 +82,6 @@ func (sm *SandboxManager) PrintWorldMap(screen *ebiten.Image) {
 	}
 }
 
-func (sm *SandboxManager) SetHandTextureID(id int) {
-	sm.HandTextureID = id
-}
-
 func (sm *SandboxManager) UpdateMapEdit() {
 	aimPos := sm.Renderer.GetAimPosition()
 	if aimPos.X < 0 {
@@ -103,15 +95,15 @@ func (sm *SandboxManager) UpdateMapEdit() {
 	if inpututil.IsMouseButtonJustPressed(ebiten.MouseButtonRight) { //左クリック: 置く
 		switch sm.Renderer.GetAimDirection() {
 		case fray.AIM_DIR_NORTH:
-			sm.Renderer.Wld.SetValue(x, y-1, z, uint8(sm.HandTextureID))
+			sm.Renderer.Wld.SetValue(x, y-1, z, uint8(sm.Renderer.HandTextureID))
 		case fray.AIM_DIR_SOUTH:
-			sm.Renderer.Wld.SetValue(x, y+1, z, uint8(sm.HandTextureID))
+			sm.Renderer.Wld.SetValue(x, y+1, z, uint8(sm.Renderer.HandTextureID))
 		case fray.AIM_DIR_EAST:
-			sm.Renderer.Wld.SetValue(x-1, y, z, uint8(sm.HandTextureID))
+			sm.Renderer.Wld.SetValue(x-1, y, z, uint8(sm.Renderer.HandTextureID))
 		case fray.AIM_DIR_WEST:
-			sm.Renderer.Wld.SetValue(x+1, y, z, uint8(sm.HandTextureID))
+			sm.Renderer.Wld.SetValue(x+1, y, z, uint8(sm.Renderer.HandTextureID))
 		case fray.AIM_DIR_TOP:
-			sm.Renderer.Wld.SetValue(x, y, z+1, uint8(sm.HandTextureID))
+			sm.Renderer.Wld.SetValue(x, y, z+1, uint8(sm.Renderer.HandTextureID))
 		}
 
 		sm.MapEditor.PrintHeightMapOnAlphaLayer(sm.Renderer.Wld.HeightMap, sm.Renderer.Textures[1].Src)
