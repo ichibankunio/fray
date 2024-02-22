@@ -126,7 +126,6 @@ func (sm *SandboxManager) UpdateMapEdit() {
 func (sm *SandboxManager) Update() error {
 	sm.Renderer.Update()
 
-	sm.Renderer.SetHandTextureID(sm.HandTextureID)
 	sm.UpdateMapEdit()
 
 	if inpututil.IsKeyJustPressed(ebiten.KeyK) {
