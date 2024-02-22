@@ -86,6 +86,10 @@ func (sm *SandboxManager) PrintWorldMap(screen *ebiten.Image) {
 	}
 }
 
+func (sm *SandboxManager) SetHandTextureID(id int) {
+	sm.HandTextureID = id
+}
+
 func (sm *SandboxManager) UpdateMapEdit() {
 	aimPos := sm.Renderer.GetAimPosition()
 	if aimPos.X < 0 {

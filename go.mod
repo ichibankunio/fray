@@ -8,7 +8,7 @@ require (
 	github.com/hajimehoshi/bitmapfont/v2 v2.2.3
 	github.com/hajimehoshi/ebiten/v2 v2.6.6
 	github.com/ichibankunio/flib v1.1.2
-	github.com/ichibankunio/fvec v0.2.0
+	github.com/ichibankunio/fvec v0.3.0
 	golang.org/x/image v0.12.0
 )
 
