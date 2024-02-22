@@ -246,8 +246,8 @@ func (r *Renderer) UpdateCamRotationByTouch() {
 
 		// fmt.Printf("%f, %f\n", r.Stk.pos[1], current)
 
-		r.Cam.RotateHorizontal(rel.X * 0.0001)
-		r.Cam.RotateVertical(rel.Y * 0.1)
+		r.Cam.RotateHorizontal(rel.X * 0.0005)
+		r.Cam.RotateVertical(rel.Y * 0.5)
 
 		if inpututil.IsMouseButtonJustReleased(ebiten.MouseButtonLeft) {
 			r.Stk.visible[1] = false
