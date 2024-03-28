@@ -14,7 +14,7 @@ type Stick struct {
 	// pos     vec2.Vec2
 	visible      [2]bool
 	img          *ebiten.Image
-	Input        [2]stickDirection
+	Input        [2]StickDirection
 	touchIDs     [2]ebiten.TouchID
 	pos          [2]vec2.Vec2
 	isMobile     bool
@@ -24,14 +24,14 @@ type Stick struct {
 	mousePosLastFrame vec2.Vec2
 }
 
-type stickDirection int
+type StickDirection int
 
 const (
-	STICK_NONE stickDirection = iota
-	STICK_UP
+	STICK_UP StickDirection = iota
 	STICK_DOWN
-	STICK_LEFT
 	STICK_RIGHT
+	STICK_LEFT
+	STICK_NONE
 )
 
 func (s *Stick) Init(screenWidth, screenHeight float64) {
@@ -46,7 +46,7 @@ func (s *Stick) Init(screenWidth, screenHeight float64) {
 	s.mousePosLastFrame = vec2.New(s.screenWidth/2, s.screenHeight/2)
 
 	s.visible = [2]bool{false, false}
-	s.Input = [2]stickDirection{
+	s.Input = [2]StickDirection{
 		STICK_NONE,
 		STICK_NONE,
 	}

@@ -8,6 +8,29 @@ import (
 	"github.com/ichibankunio/fvec/vec2"
 )
 
+type SolidInput int
+
+const (
+	SOLID_INPUT_NORTH = iota
+	SOLID_INPUT_SOUTH
+	SOLID_INPUT_EAST
+	SOLID_INPUT_WEST
+	SOLID_INPUT_NONE
+)
+
+func (r *Renderer) UpdateCamRotationBySolidInput(input SolidInput) {
+	switch input {
+	case SOLID_INPUT_NORTH:
+		r.Cam.RotateVertical(-4.0)
+	case SOLID_INPUT_SOUTH:
+		r.Cam.RotateVertical(4.0)
+	case SOLID_INPUT_EAST:
+		r.Cam.RotateHorizontal(0.015)
+	case SOLID_INPUT_WEST:
+		r.Cam.RotateHorizontal(-0.015)
+	}
+}
+
 func (r *Renderer) UpdateCamRotationByMouse() {
 	x, y := ebiten.CursorPosition()
 
@@ -20,7 +43,7 @@ func (r *Renderer) UpdateCamRotationByMouse() {
 	r.Stk.mousePosLastFrame = current
 }
 
-func (r *Renderer) UpdateCamRotationAroundSubjectByTouch() {
+func (r *Renderer) UpdateCamRotationAroundSubjectByTouch(solid bool) {
 	if len(inpututil.AppendJustPressedTouchIDs(nil)) > 0 {
 		for _, id := range inpututil.AppendJustPressedTouchIDs(nil) {
 			x, y := ebiten.TouchPosition(id)
@@ -93,6 +116,31 @@ func (r *Renderer) UpdateCamRotationAroundSubjectByTouch() {
 			x, y = ebiten.TouchPosition(r.Stk.touchIDs[1])
 		}
 
+		current := vec2.New(float64(x), float64(y))
+		rel := current.Sub(r.Stk.pos[1])
+
+		if rel.X > 0 && math.Abs(rel.Y/rel.X) < 0.8 {
+			r.Stk.Input[1] = STICK_RIGHT
+		} else if rel.X < 0 && math.Abs(rel.Y/rel.X) < 0.8 {
+			r.Stk.Input[1] = STICK_LEFT
+		} else if rel.Y > 0 && math.Abs(rel.X/rel.Y) < 0.8 {
+			r.Stk.Input[1] = STICK_DOWN
+		} else if rel.Y < 0 && math.Abs(rel.X/rel.Y) < 0.8 {
+			r.Stk.Input[1] = STICK_UP
+		} else {
+			r.Stk.Input[1] = STICK_NONE
+		}
+
+		// fmt.Printf("%f, %f\n", r.Stk.pos[1], current)
+
+		if solid {
+			r.UpdateCamRotationBySolidInput(SolidInput(r.Stk.Input[1]))
+		} else {
+			r.Cam.RotateHorizontalAroundSubject(rel.X * 0.0001)
+			r.Cam.RotateVertical(rel.Y * 0.05)
+		}
+
+		r.Stk.mousePosLastFrame = current
 
 		if inpututil.IsMouseButtonJustReleased(ebiten.MouseButtonLeft) {
 			r.Stk.visible[1] = false
@@ -106,17 +154,6 @@ func (r *Renderer) UpdateCamRotationAroundSubjectByTouch() {
 			r.Stk.touchIDs[1] = -1
 			return
 		}
-
-
-		current := vec2.New(float64(x), float64(y))
-		rel := current.Sub(r.Stk.pos[1])
-
-		// fmt.Printf("%f, %f\n", r.Stk.pos[1], current)
-
-		r.Cam.RotateHorizontalAroundSubject(rel.X * 0.0001)
-		r.Cam.RotateVertical(rel.Y * 0.05)
-
-		r.Stk.mousePosLastFrame = current
 
 		//subjectとcameraの間に壁があるときにカメラを壁の前に出す(subjectに近づく)-----------
 		// d := r.collisionCheckedDelta(r.Cam.subjectPos, r.Cam.dir.Scale(-64))
@@ -169,7 +206,7 @@ func (r *Renderer) UpdateCamRotationAroundSubjectByMouse() {
 	//------------------------------
 }
 
-func (r *Renderer) UpdateCamRotationByTouch() {
+func (r *Renderer) UpdateCamRotationByTouch(solid bool) {
 	if len(inpututil.AppendJustPressedTouchIDs(nil)) > 0 {
 		for _, id := range inpututil.AppendJustPressedTouchIDs(nil) {
 			x, y := ebiten.TouchPosition(id)
@@ -246,8 +283,22 @@ func (r *Renderer) UpdateCamRotationByTouch() {
 
 		// fmt.Printf("%f, %f\n", r.Stk.pos[1], current)
 
-		r.Cam.RotateHorizontal(rel.X * 0.0005)
-		r.Cam.RotateVertical(rel.Y * 0.5)
+		if solid {
+			if rel.X > 0 {
+				r.UpdateCamRotationBySolidInput(SOLID_INPUT_EAST)
+			} else if rel.X < 0 {
+				r.UpdateCamRotationBySolidInput(SOLID_INPUT_WEST)
+			}
+
+			if rel.Y > 0 {
+				r.UpdateCamRotationBySolidInput(SOLID_INPUT_NORTH)
+			} else if rel.Y < 0 {
+				r.UpdateCamRotationBySolidInput(SOLID_INPUT_SOUTH)
+			}
+		} else {
+			r.Cam.RotateHorizontal(rel.X * 0.0005)
+			r.Cam.RotateVertical(rel.Y * 0.5)
+		}
 
 		if inpututil.IsMouseButtonJustReleased(ebiten.MouseButtonLeft) {
 			r.Stk.visible[1] = false

@@ -8,10 +8,10 @@ import (
 	"github.com/hajimehoshi/ebiten/v2"
 	"github.com/hajimehoshi/ebiten/v2/ebitenutil"
 	"github.com/hajimehoshi/ebiten/v2/inpututil"
-	"github.com/ichibankunio/flib/fui"
 	"github.com/ichibankunio/fray"
 	"github.com/ichibankunio/fray/mapeditor"
 	"github.com/ichibankunio/fray/ui"
+	"github.com/ichibankunio/fui"
 )
 
 type SandboxManager struct {

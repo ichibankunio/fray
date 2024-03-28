@@ -11,9 +11,8 @@ import (
 	"github.com/hajimehoshi/bitmapfont/v2"
 	"github.com/hajimehoshi/ebiten/v2"
 	"github.com/hajimehoshi/ebiten/v2/inpututil"
-	"github.com/ichibankunio/flib"
-	"github.com/ichibankunio/flib/ui"
 	"github.com/ichibankunio/fray/spriteeditor"
+	"github.com/ichibankunio/fui"
 	"github.com/ichibankunio/fvec/vec2"
 	"github.com/ichibankunio/fvec/vec3"
 )
@@ -52,7 +51,7 @@ type Renderer struct {
 	// playerAnimationIndex int
 	counter int
 
-	jumpButton   *ui.Button
+	jumpButton   *fui.Button
 	jumpCounter  int
 	JumpCountMax int
 
@@ -105,7 +104,7 @@ func (r *Renderer) Init(screenWidth, screenHeight float64, canvasWidth, canvasHe
 
 	r.SpriteParameterNum = 9
 
-	r.jumpButton = ui.NewButton("ジャンプ", int(r.screenWidth)-100, 60, 100, 100, bitmapfont.Face, ui.ThemeRect, color.White, color.RGBA{20, 20, 20, 100}, color.RGBA{20, 20, 20, 100})
+	r.jumpButton = fui.NewButton("Jump", vec2.New((r.screenWidth)-120, 40), vec2.New(80, 80), bitmapfont.Face, fui.ThemeRect, color.Black, color.RGBA{0, 0, 0, 32}, color.Transparent)
 
 	r.jumpCounter = 0
 	r.JumpCountMax = 100
@@ -374,7 +373,7 @@ func (r *Renderer) Update() {
 	if runtime.GOOS == "darwin" {
 		r.UpdateCamRotationAroundSubjectByMouse()
 	} else {
-		r.UpdateCamRotationAroundSubjectByTouch()
+		r.UpdateCamRotationAroundSubjectByTouch(true)
 	}
 	r.UpdateCamPos(r.Cam.subjectPos)
 	r.UpdateCamPosZ()
@@ -388,6 +387,7 @@ func (r *Renderer) Update() {
 	spriteeditor.WriteTexture(r.Textures[0].Src, r.SpriteParameters, r.Textures[0].Offset)
 
 	// r.CalculateAimPosition()
+	r.jumpButton.SimpleUpdate()
 
 	r.counter++
 }
@@ -411,7 +411,7 @@ func (r *Renderer) Draw(screen *ebiten.Image) {
 	// r.Stk.Draw(screen)
 	// screen.DrawImage(r.textures[0], nil)
 
-	// r.jumpButton.Draw(screen)
+	r.jumpButton.Draw(screen)
 }
 
 func (r *Renderer) DrawTopView(screen *ebiten.Image) {
@@ -485,7 +485,7 @@ func (r *Renderer) IsRunningOnGround() bool {
 func (r *Renderer) UpdateCamPosZ() {
 	// if inpututil.IsKeyJustReleased(ebiten.KeySpace) || flib.IsThereJustReleasedTouch(r.jumpButton.Spr.Pos, vec2.New(float64(r.jumpButton.Spr.Img.Bounds().Dx()), float64(r.jumpButton.Spr.Img.Bounds().Dy()))) {
 	// if (inpututil.IsKeyJustReleased(ebiten.KeySpace) || flib.IsThereJustReleasedTouch(r.jumpButton.Spr.Pos, vec2.New(100, 100))) && r.Cam.subjectPos.Z - (r.GetGroundHeight(r.Cam.subjectPos)+r.Cam.shooterHeight) == 0 {
-	if (inpututil.IsKeyJustReleased(ebiten.KeySpace) || flib.IsThereJustReleasedTouch(r.jumpButton.Spr.Pos, vec2.New(100, 100))) && r.jumpCounter < r.JumpCountMax {
+	if (inpututil.IsKeyJustReleased(ebiten.KeySpace) || r.jumpButton.IsTouchJustReleased()) && r.jumpCounter < r.JumpCountMax {
 		r.Cam.vZ = 6
 		r.jumpCounter++
 	}
