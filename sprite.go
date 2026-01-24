@@ -37,7 +37,13 @@ func (r *Renderer) updateSpriteParameters() {
 	if len(r.Wld.Sprites) == 0 {
 		return
 	}
-	data := make([]float32, len(r.Wld.Sprites)*r.SpriteParameterNum)
+	needed := len(r.Wld.Sprites) * r.SpriteParameterNum
+	if cap(r.spriteParametersBuffer) < needed {
+		r.spriteParametersBuffer = make([]float32, needed)
+	} else {
+		r.spriteParametersBuffer = r.spriteParametersBuffer[:needed]
+	}
+	data := r.spriteParametersBuffer
 
 	// fmt.Printf("%f, %f, %f\n", r.Cam.GetPos(), r.Cam.subjectPos, r.Wld.Sprites[0].Pos.Z)
 

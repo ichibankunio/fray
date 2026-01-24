@@ -58,6 +58,7 @@ type Renderer struct {
 	SpriteParameterNum int
 	SpriteParameters   []float32
 	lastSpriteParameters []float32
+	spriteParametersBuffer []float32
 }
 
 type AimDirection int
