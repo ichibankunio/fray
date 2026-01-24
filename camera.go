@@ -5,6 +5,7 @@ import (
 	// "math"
 
 	"math"
+	"runtime"
 
 	"github.com/hajimehoshi/ebiten/v2"
 	// "github.com/ichibankunio/flib"
@@ -22,7 +23,6 @@ type Camera struct {
 
 	pos        vec3.Vec3
 	subjectPos vec3.Vec3
-
 
 	zoomed bool
 
@@ -76,7 +76,6 @@ func (c *Camera) GetPitch() float32 {
 	return c.pitch
 }
 
-
 func (c *Camera) SetDafaultDistanceBetweenSubjectCamera(distance float64) {
 	c.distanceBetweenSubjectCamera = distance
 }
@@ -115,7 +114,9 @@ func (c *Camera) Init(screenWidth, screenHeight float64) {
 	c.shooterHeight = 128
 	c.shooterRadius = 0.25 //equivalent to 16px
 
-	ebiten.SetCursorMode(ebiten.CursorModeCaptured)
+	if runtime.GOOS != "js" {
+		ebiten.SetCursorMode(ebiten.CursorModeCaptured)
+	}
 }
 
 // func (c *Camera) Update(g *flib.Game) {
