@@ -1,8 +1,12 @@
 package spriteeditor
 
 import (
+	"image"
+
 	"github.com/hajimehoshi/ebiten/v2"
 )
+
+var writeRowBuffer []byte
 
 type SpriteEditor struct {
 	bytes   []byte
@@ -21,19 +25,56 @@ func (se *SpriteEditor) GetTexture() *ebiten.Image {
 }
 
 func WriteTexture(dst *ebiten.Image, data []float32, offset int) *ebiten.Image {
-	bytes := make([]byte, 4*dst.Bounds().Dx()*dst.Bounds().Dy())
-
-	dst.ReadPixels(bytes)//これ毎フレーム読んでるので重い　修正必要
-
-	for i := 0; i < len(data); i++ {
-		rgba := Float32ToRGBA(data[i])
-		bytes[4*i+offset*4] = rgba[0]
-		bytes[4*i+1+offset*4] = rgba[1]
-		bytes[4*i+2+offset*4] = rgba[2]
-		bytes[4*i+3+offset*4] = rgba[3]
+	if dst == nil || len(data) == 0 {
+		return dst
 	}
 
-	dst.WritePixels(bytes)
+	bounds := dst.Bounds()
+	width := bounds.Dx()
+	height := bounds.Dy()
+	if width <= 0 || height <= 0 {
+		return dst
+	}
+
+	if offset < 0 || offset >= width*height {
+		return dst
+	}
+
+	// Write only the affected region to avoid full-frame allocations/ReadPixels in WASM.
+	startX := offset % width
+	startY := offset / width
+
+	remaining := len(data)
+	dataIndex := 0
+	if cap(writeRowBuffer) < width*4 {
+		writeRowBuffer = make([]byte, width*4)
+	}
+	rowBuffer := writeRowBuffer[:width*4]
+	y := startY
+	x := startX
+	for remaining > 0 && y < height {
+		rowWidth := width - x
+		if remaining < rowWidth {
+			rowWidth = remaining
+		}
+
+		for i := 0; i < rowWidth; i++ {
+			rgba := Float32ToRGBA(data[dataIndex])
+			base := i * 4
+			rowBuffer[base] = rgba[0]
+			rowBuffer[base+1] = rgba[1]
+			rowBuffer[base+2] = rgba[2]
+			rowBuffer[base+3] = rgba[3]
+			dataIndex++
+		}
+
+		sub := dst.SubImage(image.Rect(x, y, x+rowWidth, y+1)).(*ebiten.Image)
+		sub.WritePixels(rowBuffer[:rowWidth*4])
+
+		remaining -= rowWidth
+		x = 0
+		y++
+	}
 
 	// savefile, err := os.Create("./game/texturesheet.png")
 	// if err != nil {
