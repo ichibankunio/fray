@@ -370,7 +370,7 @@ func (r *Renderer) Update() {
 	// r.UpdateCamRotationByMouse()
 	// r.UpdateCamRotationByTouch()
 
-	if runtime.GOOS == "darwin" {
+	if runtime.GOOS == "darwin" || runtime.GOARCH == "linux" {
 		r.UpdateCamRotationAroundSubjectByMouse()
 	} else {
 		r.UpdateCamRotationAroundSubjectByTouch(true)
