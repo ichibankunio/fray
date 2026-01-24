@@ -21,6 +21,10 @@ type MapEditor struct {
 
 	heightMapBuffer []uint8
 	imageSrcBuffer  []uint8
+
+	heightMapInitialized bool
+	worldMapCanvas       *ebiten.Image
+	worldMapBuffer       []uint8
 }
 
 func (me *MapEditor) GetCanvas() *ebiten.Image {
@@ -82,7 +86,10 @@ func (me *MapEditor) CopyHeightMap(heightMapData []uint8) {
 
 // src: canvasWidth*canvasHeight, buffer: screenWidth*screenHeight*4
 func (me *MapEditor) PrintHeightMapOnAlphaLayer(src []uint8, dst *ebiten.Image) {
-	dst.ReadPixels(me.imageSrcBuffer)
+	if !me.heightMapInitialized {
+		dst.ReadPixels(me.imageSrcBuffer)
+		me.heightMapInitialized = true
+	}
 	for i := 0; i < len(src); i++ {
 		me.imageSrcBuffer[((i/me.canvasWidth)*me.screenWidth+(i%me.canvasWidth))*4+3] = src[i] //rgbaのaをコピー
 	}
@@ -164,8 +171,16 @@ func (me *MapEditor) WriteWorldMapImage(worldMap [][]uint8, heightMap []uint8) *
 
 func (me *MapEditor) PrintWorldMap(src [][]uint8, dst *ebiten.Image) {
 	dst.Clear()
-	canvas := ebiten.NewImage(me.canvasWidth, me.canvasHeight)
-	buffer := make([]uint8, me.canvasWidth*me.canvasHeight*4)
+	if me.worldMapCanvas == nil {
+		me.worldMapCanvas = ebiten.NewImage(me.canvasWidth, me.canvasHeight)
+	}
+	if cap(me.worldMapBuffer) < me.canvasWidth*me.canvasHeight*4 {
+		me.worldMapBuffer = make([]uint8, me.canvasWidth*me.canvasHeight*4)
+	} else {
+		me.worldMapBuffer = me.worldMapBuffer[:me.canvasWidth*me.canvasHeight*4]
+	}
+	canvas := me.worldMapCanvas
+	buffer := me.worldMapBuffer
 
 	for i := 0; i < int(math.Ceil(float64(len(src))/4)); i++ {
 		for j := 0; j < len(src[i]); j++ {
