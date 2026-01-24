@@ -57,6 +57,7 @@ type Renderer struct {
 
 	SpriteParameterNum int
 	SpriteParameters   []float32
+	lastSpriteParameters []float32
 }
 
 type AimDirection int
@@ -383,13 +384,36 @@ func (r *Renderer) Update() {
 
 	r.updateSpriteParameters()
 	r.sortSpriteParameters()
-
-	spriteeditor.WriteTexture(r.Textures[0].Src, r.SpriteParameters, r.Textures[0].Offset)
+	if r.spriteParametersChanged() {
+		spriteeditor.WriteTexture(r.Textures[0].Src, r.SpriteParameters, r.Textures[0].Offset)
+		r.syncLastSpriteParameters()
+	}
 
 	// r.CalculateAimPosition()
 	r.jumpButton.SimpleUpdate()
 
 	r.counter++
+}
+
+func (r *Renderer) spriteParametersChanged() bool {
+	if len(r.SpriteParameters) != len(r.lastSpriteParameters) {
+		return true
+	}
+	for i, v := range r.SpriteParameters {
+		if v != r.lastSpriteParameters[i] {
+			return true
+		}
+	}
+	return false
+}
+
+func (r *Renderer) syncLastSpriteParameters() {
+	if cap(r.lastSpriteParameters) < len(r.SpriteParameters) {
+		r.lastSpriteParameters = make([]float32, len(r.SpriteParameters))
+	} else {
+		r.lastSpriteParameters = r.lastSpriteParameters[:len(r.SpriteParameters)]
+	}
+	copy(r.lastSpriteParameters, r.SpriteParameters)
 }
 
 func (r *Renderer) Draw(screen *ebiten.Image) {
