@@ -1,11 +1,25 @@
 package mapeditor
 
 import (
+	"encoding/json"
 	"image"
 	"math"
 
 	"github.com/hajimehoshi/ebiten/v2"
 )
+
+type worldMapJSON struct {
+	CanvasWidth  int       `json:"canvasWidth"`
+	CanvasHeight int       `json:"canvasHeight"`
+	CanvasDepth  int       `json:"canvasDepth"`
+	Layers       [][]uint8 `json:"layers"`
+}
+
+type heightMapJSON struct {
+	CanvasWidth  int     `json:"canvasWidth"`
+	CanvasHeight int     `json:"canvasHeight"`
+	Data         []uint8 `json:"data"`
+}
 
 type MapEditor struct {
 	bytes []byte
@@ -277,6 +291,27 @@ func (me *MapEditor) LoadHeightMapFromImage(img *ebiten.Image, dst []uint8) {
 	}
 }
 
+// JSON format:
+// {
+//   "canvasWidth": 128,
+//   "canvasHeight": 128,
+//   "data": [...]
+// }
+func (me *MapEditor) LoadHeightMapFromJson(data []byte, dst []uint8) {
+	var hm heightMapJSON
+	if err := json.Unmarshal(data, &hm); err != nil {
+		return
+	}
+	if len(hm.Data) == 0 {
+		return
+	}
+	n := len(dst)
+	if len(hm.Data) < n {
+		n = len(hm.Data)
+	}
+	copy(dst[:n], hm.Data[:n])
+}
+
 func (me *MapEditor) LoadWorldMapFromImage(img *ebiten.Image, dst [][]uint8) {
 	buffer := make([]uint8, me.canvasWidth*me.canvasHeight*4)
 
@@ -322,6 +357,42 @@ func (me *MapEditor) LoadWorldMapFromImage(img *ebiten.Image, dst [][]uint8) {
 		}
 	}
 
+}
+
+// JSON format:
+// {
+//   "canvasWidth": 128,
+//   "canvasHeight": 128,
+//   "canvasDepth": 56,
+//   "layers": [[...], ...]
+// }
+func (me *MapEditor) LoadWorldMapFromJson(data []byte, dst [][]uint8) {
+	var wm worldMapJSON
+	if err := json.Unmarshal(data, &wm); err != nil {
+		return
+	}
+	if len(wm.Layers) == 0 {
+		return
+	}
+
+	layerCount := len(dst)
+	if wm.CanvasDepth > 0 && wm.CanvasDepth < layerCount {
+		layerCount = wm.CanvasDepth
+	}
+	if len(wm.Layers) < layerCount {
+		layerCount = len(wm.Layers)
+	}
+
+	for i := 0; i < layerCount; i++ {
+		if len(wm.Layers[i]) == 0 {
+			continue
+		}
+		n := len(dst[i])
+		if len(wm.Layers[i]) < n {
+			n = len(wm.Layers[i])
+		}
+		copy(dst[i][:n], wm.Layers[i][:n])
+	}
 }
 
 func (me *MapEditor) WriteHeightMapImage(src []uint8) *ebiten.Image {
