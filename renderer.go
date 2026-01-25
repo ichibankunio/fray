@@ -118,7 +118,7 @@ func (r *Renderer) Init(screenWidth, screenHeight float64, canvasWidth, canvasHe
 
 	r.HandTextureID = 0
 	r.CeilingHeight = 0
-	r.CeilingTextureID = 0
+	r.CeilingTextureID = -1
 }
 
 func (r *Renderer) SetHandTextureID(id int) {

@@ -280,12 +280,28 @@ func (me *MapEditor) LoadHeightMapFromImage(img *ebiten.Image, dst []uint8) {
 func (me *MapEditor) LoadWorldMapFromImage(img *ebiten.Image, dst [][]uint8) {
 	buffer := make([]uint8, me.canvasWidth*me.canvasHeight*4)
 
-	for i := 0; i < int(math.Ceil(float64(len(dst))/3)); i++ {
-		x0 := i % (me.screenWidth / me.canvasWidth) * me.canvasWidth
+	b := img.Bounds()
+	if b.Dx() < me.canvasWidth || b.Dy() < me.canvasHeight {
+		return
+	}
+
+	tilesX := b.Dx() / me.canvasWidth
+	tilesY := b.Dy() / me.canvasHeight
+	if tilesX <= 0 || tilesY <= 0 {
+		return
+	}
+
+	maxTiles := tilesX * tilesY
+	needTiles := int(math.Ceil(float64(len(dst)) / 3))
+	if needTiles > maxTiles {
+		needTiles = maxTiles
+	}
+
+	for i := 0; i < needTiles; i++ {
+		x0 := (i % tilesX) * me.canvasWidth
 		x1 := x0 + me.canvasWidth
-		y0 := i / (me.screenWidth / me.canvasWidth) * me.canvasHeight
+		y0 := (i / tilesX) * me.canvasHeight
 		y1 := y0 + me.canvasHeight
-		// println(x0, x1, y0, y1)
 		img.SubImage(image.Rect(x0, y0, x1, y1)).(*ebiten.Image).ReadPixels(buffer)
 
 		for j := 0; j < len(dst[0]); j++ {

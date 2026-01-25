@@ -281,6 +281,9 @@ func Fragment(dstPos vec4, srcPos vec2, color vec4) vec4 {
     if CeilingHeight > 0.0 && CeilingHeight > PosZ && dstPos.y < ScreenSize.y/2 + Pitch {
         distanceCeilingFromCamera := (CeilingHeight - PosZ) * ScreenSize.y / (ScreenSize.y - 2.0*(dstPos.y - Pitch))
         if distanceCeilingFromCamera > 0.0 {
+            if CeilingTextureID < 0.0 {
+                return vec4(1, 0, 1, 1)
+            }
             currentCeiling := Pos + rayDir * distanceCeilingFromCamera
             posOnTexture := vec2(fract(currentCeiling.x) + mod(CeilingTextureID, ScreenSize.x / TexSize), fract(currentCeiling.y) + floor(CeilingTextureID/(ScreenSize.x / TexSize)))*TexSize
             clr := imageSrc1UnsafeAt(texOrigin + posOnTexture)
@@ -306,4 +309,3 @@ func EncodeFloatRGBA(v float) vec4 {
 func DecodeFloatRGBA(rgba vec4) float {
     return dot(rgba, vec4(1.0, 1/255.0, 1/65025.0, 1/16581375.0))
 }
-
