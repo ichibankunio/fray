@@ -150,7 +150,8 @@ func Fragment(dstPos vec4, srcPos vec2, color vec4) vec4 {
                 rayHeightFloor := floor(rayHeight)
                 // rayHeightFract := fract(rayHeight)
 
-                texOffset := vec2(mod(floor(rayHeightFloor/4), ScreenSize.x / WorldSize.x), floor(floor(rayHeightFloor/4)/(ScreenSize.x / WorldSize.x)))*WorldSize.x
+                tilesPerRow := max(1.0, floor(ScreenSize.x / WorldSize.x))
+                texOffset := vec2(mod(floor(rayHeightFloor/4), tilesPerRow), floor(floor(rayHeightFloor/4)/tilesPerRow))*WorldSize.x
  
                 wallTextureIDFragment := imageSrc2UnsafeAt(texOrigin + texOffset + mapPos) * 255
                 rayHeightMod4 := mod(rayHeightFloor, 4)
@@ -222,7 +223,8 @@ func Fragment(dstPos vec4, srcPos vec2, color vec4) vec4 {
 
                 wallHeightAtRayPosition := imageSrc1UnsafeAt(texOrigin + floor(currentFloor)).a * 255
 
-                texOffset := vec2(mod(floor((wallHeightAtRayPosition-1)/4), ScreenSize.x / WorldSize.x), floor(floor((wallHeightAtRayPosition-1)/4)/(ScreenSize.x / WorldSize.x)))*WorldSize.x
+                tilesPerRow := max(1.0, floor(ScreenSize.x / WorldSize.x))
+                texOffset := vec2(mod(floor((wallHeightAtRayPosition-1)/4), tilesPerRow), floor(floor((wallHeightAtRayPosition-1)/4)/tilesPerRow))*WorldSize.x
 
                 // if dstPos.y < ScreenSize.y/2 {
                 //     return vec4(1, 0, 0, 1)
