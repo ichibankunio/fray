@@ -47,6 +47,19 @@ func (w *World) GetHeight(x, y int) uint8 {
 	return w.HeightMap[y*w.canvasWidth+x]
 }
 
+func (w *World) BuildHeightMapFromWorldMap() {
+	for i := 0; i < len(w.HeightMap); i++ {
+		height := 0
+		for z := w.canvasDepth - 1; z >= 0; z-- {
+			if w.WorldMap[z][i] != 0 {
+				height = z + 1
+				break
+			}
+		}
+		w.HeightMap[i] = uint8(height)
+	}
+}
+
 func (w *World) DeleteValue(x, y, z int) {
 	if z == int(w.HeightMap[y*w.canvasWidth+x]) && z != 0 {
 		// fmt.Println("OK", z, int(w.HeightMap[y*w.canvasWidth+x]))
