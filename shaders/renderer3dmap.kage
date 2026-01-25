@@ -39,6 +39,7 @@ var HandTextureID float
 func Fragment(dstPos vec4, srcPos vec2, color vec4) vec4 {
 
     texOrigin := imageSrc0Origin()
+    tilesPerRow := max(1.0, floor(ScreenSize.x / TexSize))
     cameraX := 2.0 * (1.0 - dstPos.x / ScreenSize.x) - 1.0 //x-coordinate in camera space
 
     rayDir := Dir + Plane * cameraX
@@ -110,7 +111,7 @@ func Fragment(dstPos vec4, srcPos vec2, color vec4) vec4 {
 
                     if distanceToCamera >= 0 && distanceToCamera < squaredEuclidean && dstPos.x > posOnScreen.x && dstPos.x < posOnScreen.x + sizeOnScreen.x && dstPos.y > posOnScreen.y && dstPos.y < posOnScreen.y + sizeOnScreen.y {
 
-                        posOnTexture := vec2((dstPos.x - posOnScreen.x) / sizeOnScreen.x + mod(TexIDBegin + CurrentAnimation, ScreenSize.x / TexSize), (dstPos.y - posOnScreen.y) / sizeOnScreen.y + floor((TexIDBegin + CurrentAnimation) / (ScreenSize.x / TexSize))) * TexSize
+                        posOnTexture := vec2((dstPos.x - posOnScreen.x) / sizeOnScreen.x + mod(TexIDBegin + CurrentAnimation, tilesPerRow), (dstPos.y - posOnScreen.y) / sizeOnScreen.y + floor((TexIDBegin + CurrentAnimation) / tilesPerRow)) * TexSize
 
                         clr := imageSrc0UnsafeAt(texOrigin + posOnTexture)
 
@@ -150,8 +151,8 @@ func Fragment(dstPos vec4, srcPos vec2, color vec4) vec4 {
                 rayHeightFloor := floor(rayHeight)
                 // rayHeightFract := fract(rayHeight)
 
-                tilesPerRow := max(1.0, floor(ScreenSize.x / WorldSize.x))
-                texOffset := vec2(mod(floor(rayHeightFloor/4), tilesPerRow), floor(floor(rayHeightFloor/4)/tilesPerRow))*WorldSize.x
+                mapTilesPerRow := max(1.0, floor(ScreenSize.x / WorldSize.x))
+                texOffset := vec2(mod(floor(rayHeightFloor/4), mapTilesPerRow), floor(floor(rayHeightFloor/4)/mapTilesPerRow))*WorldSize.x
  
                 wallTextureIDFragment := imageSrc2UnsafeAt(texOrigin + texOffset + mapPos) * 255
                 rayHeightMod4 := mod(rayHeightFloor, 4)
@@ -197,7 +198,7 @@ func Fragment(dstPos vec4, srcPos vec2, color vec4) vec4 {
                     return vec4(5.0/255.0, 151.0/255.0, 242.0/255.0, 1)
                     // discard()
                 }
-                posOnTexture := vec2(wallX + mod(wallTextureID, ScreenSize.x / TexSize), wallY + floor(wallTextureID/(ScreenSize.x / TexSize)))*TexSize
+                posOnTexture := vec2(wallX + mod(wallTextureID, tilesPerRow), wallY + floor(wallTextureID/tilesPerRow))*TexSize
                 
                 clr := imageSrc1UnsafeAt(texOrigin + posOnTexture)
 
@@ -223,8 +224,8 @@ func Fragment(dstPos vec4, srcPos vec2, color vec4) vec4 {
 
                 wallHeightAtRayPosition := imageSrc1UnsafeAt(texOrigin + floor(currentFloor)).a * 255
 
-                tilesPerRow := max(1.0, floor(ScreenSize.x / WorldSize.x))
-                texOffset := vec2(mod(floor((wallHeightAtRayPosition-1)/4), tilesPerRow), floor(floor((wallHeightAtRayPosition-1)/4)/tilesPerRow))*WorldSize.x
+                mapTilesPerRow := max(1.0, floor(ScreenSize.x / WorldSize.x))
+                texOffset := vec2(mod(floor((wallHeightAtRayPosition-1)/4), mapTilesPerRow), floor(floor((wallHeightAtRayPosition-1)/4)/mapTilesPerRow))*WorldSize.x
 
                 // if dstPos.y < ScreenSize.y/2 {
                 //     return vec4(1, 0, 0, 1)
@@ -261,7 +262,7 @@ func Fragment(dstPos vec4, srcPos vec2, color vec4) vec4 {
                 }
                 */
 
-                posOnTexture := vec2(fract(currentFloor.x) + mod(floorTextureID, ScreenSize.x / TexSize), fract(currentFloor.y) + floor(floorTextureID/(ScreenSize.x / TexSize)))*TexSize
+                posOnTexture := vec2(fract(currentFloor.x) + mod(floorTextureID, tilesPerRow), fract(currentFloor.y) + floor(floorTextureID/tilesPerRow))*TexSize
 
                 clr := imageSrc1UnsafeAt(texOrigin + posOnTexture)
                 return vec4(clr.rgb + (spriteBlending.rgb - clr.rgb) * spriteBlending.a, 1)
@@ -284,7 +285,7 @@ func Fragment(dstPos vec4, srcPos vec2, color vec4) vec4 {
                 return vec4(1, 0, 1, 1)
             }
             currentCeiling := Pos + rayDir * distanceCeilingFromCamera
-            posOnTexture := vec2(fract(currentCeiling.x) + mod(CeilingTextureID, ScreenSize.x / TexSize), fract(currentCeiling.y) + floor(CeilingTextureID/(ScreenSize.x / TexSize)))*TexSize
+            posOnTexture := vec2(fract(currentCeiling.x) + mod(CeilingTextureID, tilesPerRow), fract(currentCeiling.y) + floor(CeilingTextureID/tilesPerRow))*TexSize
             clr := imageSrc1UnsafeAt(texOrigin + posOnTexture)
             return vec4(clr.rgb + (spriteBlending.rgb - clr.rgb) * spriteBlending.a, 1)
         }

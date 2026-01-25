@@ -101,14 +101,22 @@ func (me *MapEditor) CopyHeightMap(heightMapData []uint8) {
 // src: canvasWidth*canvasHeight, buffer: screenWidth*screenHeight*4
 func (me *MapEditor) PrintHeightMapOnAlphaLayer(src []uint8, dst *ebiten.Image) {
 	if !me.heightMapInitialized {
-		dst.ReadPixels(me.imageSrcBuffer)
+		target := dst
+		if b := dst.Bounds(); b.Dx() != me.screenWidth || b.Dy() != me.screenHeight {
+			target = dst.SubImage(image.Rect(0, 0, me.screenWidth, me.screenHeight)).(*ebiten.Image)
+		}
+		target.ReadPixels(me.imageSrcBuffer)
 		me.heightMapInitialized = true
 	}
 	for i := 0; i < len(src); i++ {
 		me.imageSrcBuffer[((i/me.canvasWidth)*me.screenWidth+(i%me.canvasWidth))*4+3] = src[i] //rgbaのaをコピー
 	}
 
-	dst.WritePixels(me.imageSrcBuffer)
+	target := dst
+	if b := dst.Bounds(); b.Dx() != me.screenWidth || b.Dy() != me.screenHeight {
+		target = dst.SubImage(image.Rect(0, 0, me.screenWidth, me.screenHeight)).(*ebiten.Image)
+	}
+	target.WritePixels(me.imageSrcBuffer)
 
 	//保存するファイル名
 	// savefile, err := os.Create("heightmap.png")

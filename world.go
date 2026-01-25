@@ -47,6 +47,18 @@ func (w *World) GetHeight(x, y int) uint8 {
 	return w.HeightMap[y*w.canvasWidth+x]
 }
 
+func (w *World) CanvasWidth() int {
+	return w.canvasWidth
+}
+
+func (w *World) CanvasHeight() int {
+	return w.canvasHeight
+}
+
+func (w *World) CanvasDepth() int {
+	return w.canvasDepth
+}
+
 func (w *World) BuildHeightMapFromWorldMap() {
 	for i := 0; i < len(w.HeightMap); i++ {
 		height := 0
@@ -58,6 +70,18 @@ func (w *World) BuildHeightMapFromWorldMap() {
 		}
 		w.HeightMap[i] = uint8(height)
 	}
+}
+
+func (w *World) SetTextureID(x, y, z int, texID uint8) bool {
+	if x < 0 || y < 0 || z < 0 || x >= w.canvasWidth || y >= w.canvasHeight || z >= w.canvasDepth {
+		return false
+	}
+	idx := y*w.canvasWidth + x
+	if w.WorldMap[z][idx] == 0 {
+		return false
+	}
+	w.WorldMap[z][idx] = texID + 1
+	return true
 }
 
 func (w *World) DeleteValue(x, y, z int) {

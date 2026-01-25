@@ -138,13 +138,27 @@ func (r *Renderer) SetCeilingTextureID(id int) {
 }
 
 func (r *Renderer) NewTextureSheet(src []*ebiten.Image) *ImageSrc {
+	cols := int(r.screenWidth) / r.texSize
+	if cols < 1 {
+		cols = 1
+	}
+	sheetW := int(r.screenWidth)
+	rows := (len(src) + cols - 1) / cols
+	if rows < 1 {
+		rows = 1
+	}
+	sheetH := int(r.screenHeight)
+	if rows*r.texSize > sheetH {
+		sheetH = rows * r.texSize
+	}
+
 	textureSheet := &ImageSrc{
-		Src:    ebiten.NewImage(int(r.screenWidth), int(r.screenHeight)),
-		Offset: int(r.screenWidth) * int(r.screenHeight-1),
+		Src:    ebiten.NewImage(sheetW, sheetH),
+		Offset: sheetW * (sheetH - 1),
 	}
 	for i, s := range src {
 		op := &ebiten.DrawImageOptions{}
-		op.GeoM.Translate(float64((i%(int(r.screenWidth)/r.texSize))*r.texSize), float64((i/(int(r.screenWidth)/r.texSize))*r.texSize))
+		op.GeoM.Translate(float64((i%cols)*r.texSize), float64((i/cols)*r.texSize))
 
 		textureSheet.Src.DrawImage(s, op)
 	}
