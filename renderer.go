@@ -59,6 +59,8 @@ type Renderer struct {
 	SpriteParameters   []float32
 	lastSpriteParameters []float32
 	spriteParametersBuffer []float32
+
+	CeilingHeight float32
 }
 
 type AimDirection int
@@ -114,6 +116,7 @@ func (r *Renderer) Init(screenWidth, screenHeight float64, canvasWidth, canvasHe
 	r.aimPos = vec3.New(0, 0, 0)
 
 	r.HandTextureID = 0
+	r.CeilingHeight = 0
 }
 
 func (r *Renderer) SetHandTextureID(id int) {
@@ -122,6 +125,10 @@ func (r *Renderer) SetHandTextureID(id int) {
 
 func (r *Renderer) SetTextures(textures [4]*ImageSrc) {
 	r.Textures = textures
+}
+
+func (r *Renderer) SetCeilingHeight(h float32) {
+	r.CeilingHeight = h
 }
 
 func (r *Renderer) NewTextureSheet(src []*ebiten.Image) *ImageSrc {
@@ -460,6 +467,7 @@ func (r *Renderer) renderWall(screen *ebiten.Image) {
 		"HandTextureID": float32(r.HandTextureID),
 		"TexSize":       float32(r.texSize),
 		"WorldSize":     []float32{float32(r.Wld.canvasWidth), float32(r.Wld.canvasHeight)},
+		"CeilingHeight": r.CeilingHeight,
 	}
 
 	op.Images[0] = r.Textures[0].Src //wall(texture), sprite(texture)

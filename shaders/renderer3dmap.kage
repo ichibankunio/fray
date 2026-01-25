@@ -16,6 +16,7 @@ var SpriteParameterNum int
 var TexSize float//single wall/floor/sprite size in px
 var ScreenSize vec2
 var WorldSize vec2
+var CeilingHeight float//ceiling height in blocks (<= 0 disables ceiling)
 
 var AimPos vec3
 var HandTextureID float
@@ -276,6 +277,13 @@ func Fragment(dstPos vec4, srcPos vec2, color vec4) vec4 {
         return vec4(1, 0, 0, 1)
     }
 
+    if CeilingHeight > 0.0 && CeilingHeight > PosZ && dstPos.y < ScreenSize.y/2 + Pitch {
+        distanceCeilingFromCamera := (CeilingHeight - PosZ) * ScreenSize.y / (ScreenSize.y - 2.0*(dstPos.y - Pitch))
+        if distanceCeilingFromCamera > 0.0 {
+            return vec4(1, 1, 1, 1)
+        }
+    }
+
     clr := vec4((160.0+128.0*(dstPos.y/ScreenSize.y))/255.0, (216.0+128.0*(dstPos.y/ScreenSize.y))/255.0, (239.0+128.0*(dstPos.y/ScreenSize.y))/255.0, 1) //skyblue
     // clr := vec4(0*(dstPos.y/ScreenSize.y)/255.0, 255.0*(dstPos.y/ScreenSize.y)/255.0, 255.0*(dstPos.y/ScreenSize.y)/255.0, 1) //skyblue
     // clr := vec4(142.0/255.0, 255.0/255.0, 255.0/255.0, 1)
@@ -294,6 +302,5 @@ func EncodeFloatRGBA(v float) vec4 {
 func DecodeFloatRGBA(rgba vec4) float {
     return dot(rgba, vec4(1.0, 1/255.0, 1/65025.0, 1/16581375.0))
 }
-
 
 
