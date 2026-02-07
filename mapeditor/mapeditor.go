@@ -35,6 +35,7 @@ type MapEditor struct {
 
 	heightMapBuffer []uint8
 	imageSrcBuffer  []uint8
+	heightPlaneBuffer []uint8
 
 	heightMapInitialized bool
 	worldMapCanvas       *ebiten.Image
@@ -72,6 +73,7 @@ func NewMapEditor(screenWidth, screenHeight int, canvasWidth int, canvasHeight i
 		canvasDepth:     canvasDepth, //temporary value
 		heightMapBuffer: make([]uint8, canvasWidth*canvasHeight*4),
 		imageSrcBuffer:  make([]uint8, screenWidth*screenHeight*4),
+		heightPlaneBuffer: make([]uint8, screenWidth*screenHeight*4),
 	}
 }
 
@@ -127,6 +129,64 @@ func (me *MapEditor) PrintHeightMapOnAlphaLayer(src []uint8, dst *ebiten.Image) 
 	// defer savefile.Close()
 	// // PNG形式で保存する
 	// png.Encode(savefile, dst)
+}
+
+func (me *MapEditor) PrintHeightPlaneMap(base, slopeX, slopeY []float32, dst *ebiten.Image) {
+	if cap(me.heightPlaneBuffer) < me.screenWidth*me.screenHeight*4 {
+		me.heightPlaneBuffer = make([]uint8, me.screenWidth*me.screenHeight*4)
+	} else {
+		me.heightPlaneBuffer = me.heightPlaneBuffer[:me.screenWidth*me.screenHeight*4]
+	}
+	buffer := me.heightPlaneBuffer
+	for i := range buffer {
+		buffer[i] = 0
+	}
+
+	n := len(base)
+	if len(slopeX) < n {
+		n = len(slopeX)
+	}
+	if len(slopeY) < n {
+		n = len(slopeY)
+	}
+	if n > me.canvasWidth*me.canvasHeight {
+		n = me.canvasWidth * me.canvasHeight
+	}
+
+	for i := 0; i < n; i++ {
+		baseV := base[i]
+		if baseV < 0 {
+			baseV = 0
+		} else if baseV > 255 {
+			baseV = 255
+		}
+		slopeXv := slopeX[i]
+		slopeYv := slopeY[i]
+		encSlopeX := slopeXv*128 + 128
+		if encSlopeX < 0 {
+			encSlopeX = 0
+		} else if encSlopeX > 255 {
+			encSlopeX = 255
+		}
+		encSlopeY := slopeYv*128 + 128
+		if encSlopeY < 0 {
+			encSlopeY = 0
+		} else if encSlopeY > 255 {
+			encSlopeY = 255
+		}
+
+		dstIdx := ((i/me.canvasWidth)*me.screenWidth + (i % me.canvasWidth)) * 4
+		buffer[dstIdx] = uint8(baseV + 0.5)
+		buffer[dstIdx+1] = uint8(encSlopeX + 0.5)
+		buffer[dstIdx+2] = uint8(encSlopeY + 0.5)
+		buffer[dstIdx+3] = 255
+	}
+
+	target := dst
+	if b := dst.Bounds(); b.Dx() != me.screenWidth || b.Dy() != me.screenHeight {
+		target = dst.SubImage(image.Rect(0, 0, me.screenWidth, me.screenHeight)).(*ebiten.Image)
+	}
+	target.WritePixels(buffer)
 }
 
 func (me *MapEditor) WriteWorldMapImage(worldMap [][]uint8, heightMap []uint8) *ebiten.Image {

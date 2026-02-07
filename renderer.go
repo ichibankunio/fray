@@ -277,7 +277,7 @@ func (r *Renderer) CalculateAimPosition() {
 					r.aimPos.Y = hitPos.Y
 					fmt.Println("hitPos: ", hitPos)
 
-					r.aimPos.Z = float64(r.Wld.HeightMap[int(hitPos.Y)*r.canvasWidth+int(hitPos.X)])
+					r.aimPos.Z = r.heightAtBlocks(hitPos.X, hitPos.Y)
 					fmt.Println("r.aimPos.Z: ", r.aimPos.Z, "ray.detectedWallHeight", ray.detectedWallHeight)
 					if r.aimPos.Z != float64(ray.detectedWallHeight) {
 
@@ -345,7 +345,7 @@ func (r *Renderer) CalculateAimPosition() {
 			downRay := r.castRayMultiHeight(r.Cam.dir, r.Cam.plane, origin, RAY_HIT_DOWN)
 			fmt.Printf("downRay.perpwalldist: %.2f, downray.detectedwallHeight: %d\n", downRay.perpWallDist, downRay.detectedWallHeight)
 			if overallDistance+downRay.perpWallDist < aimDistance {
-				r.aimPos.Z = float64(r.Wld.HeightMap[int(downRay.hitPosOnMap.Y)*r.canvasWidth+int(downRay.hitPosOnMap.X)]) * float64(r.texSize)
+				r.aimPos.Z = r.heightAtBlocks(downRay.hitPosOnMap.X, downRay.hitPosOnMap.Y) * float64(r.texSize)
 				fmt.Println("降りる")
 			} else {
 				r.aimPos.Z = origin.Z / float64(r.texSize)
@@ -392,6 +392,30 @@ func (r *Renderer) GetScreenWidth() float64 {
 
 func (r *Renderer) GetScreenHeight() float64 {
 	return r.screenHeight
+}
+
+func (r *Renderer) heightAtBlocks(x, y float64) float64 {
+	maxX := float64(r.canvasWidth) - 1e-6
+	maxY := float64(r.canvasHeight) - 1e-6
+	if x < 0 {
+		x = 0
+	} else if x > maxX {
+		x = maxX
+	}
+	if y < 0 {
+		y = 0
+	} else if y > maxY {
+		y = maxY
+	}
+	cellX := math.Floor(x)
+	cellY := math.Floor(y)
+	fracX := x - cellX
+	fracY := y - cellY
+	idx := int(cellY)*r.canvasWidth + int(cellX)
+	base := float64(r.Wld.HeightBase[idx])
+	slopeX := float64(r.Wld.SlopeX[idx])
+	slopeY := float64(r.Wld.SlopeY[idx])
+	return base + slopeX*fracX + slopeY*fracY
 }
 
 func (r *Renderer) Update() {

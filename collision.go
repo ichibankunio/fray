@@ -178,12 +178,7 @@ func (r *Renderer) collisionCheckedDeltaZ(pos vec3.Vec3, delta float64) float64 
 }
 
 func (r *Renderer) GetGroundHeight(pos vec3.Vec3) float64 {
-	if pos.Y/float64(r.texSize) < 0 {
-		pos.Y = 0
-	}
-	if pos.X/float64(r.texSize) < 0 {
-		pos.X = 0
-	}
-
-	return float64(r.Wld.HeightMap[int(pos.Y/float64(r.texSize))*r.canvasWidth+int(pos.X/float64(r.texSize))]) * float64(r.texSize)
+	x := pos.X / float64(r.texSize)
+	y := pos.Y / float64(r.texSize)
+	return r.heightAtBlocks(x, y) * float64(r.texSize)
 }

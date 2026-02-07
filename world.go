@@ -9,6 +9,9 @@ type World struct {
 
 	WorldMap  [][]uint8 //texture ID map
 	HeightMap []uint8   //height map
+	HeightBase []float32
+	SlopeX []float32
+	SlopeY []float32
 
 	screenWidth  int
 	screenHeight int
@@ -27,6 +30,9 @@ type World struct {
 func (w *World) Init(screenWidth int, screenHeight int, canvasWidth int, canvasHeight int, canvasDepth int) {
 	w.imageSrcBuffer = make([]uint8, screenWidth*screenHeight*4)
 	w.HeightMap = make([]uint8, canvasWidth*canvasHeight)
+	w.HeightBase = make([]float32, canvasWidth*canvasHeight)
+	w.SlopeX = make([]float32, canvasWidth*canvasHeight)
+	w.SlopeY = make([]float32, canvasWidth*canvasHeight)
 	w.WorldMap = make([][]uint8, canvasDepth)
 	for i := 0; i < canvasDepth; i++ {
 		w.WorldMap[i] = make([]uint8, canvasWidth*canvasHeight)
@@ -69,6 +75,17 @@ func (w *World) BuildHeightMapFromWorldMap() {
 			}
 		}
 		w.HeightMap[i] = uint8(height)
+		w.HeightBase[i] = float32(height)
+		w.SlopeX[i] = 0
+		w.SlopeY[i] = 0
+	}
+}
+
+func (w *World) SyncHeightPlanesFromHeightMap() {
+	for i, h := range w.HeightMap {
+		w.HeightBase[i] = float32(h)
+		w.SlopeX[i] = 0
+		w.SlopeY[i] = 0
 	}
 }
 
@@ -89,6 +106,9 @@ func (w *World) DeleteValue(x, y, z int) {
 		// fmt.Println("OK", z, int(w.HeightMap[y*w.canvasWidth+x]))
 		w.WorldMap[z-1][y*w.canvasWidth+x] = 0
 		w.HeightMap[y*w.canvasWidth+x] = uint8(z - 1)
+		w.HeightBase[y*w.canvasWidth+x] = float32(z - 1)
+		w.SlopeX[y*w.canvasWidth+x] = 0
+		w.SlopeY[y*w.canvasWidth+x] = 0
 	} else {
 		// fmt.Println("NG", z ,int(w.HeightMap[y*w.canvasWidth+x]))
 	}
@@ -100,6 +120,9 @@ func (w *World) SetValue(x, y, z int, value uint8) {
 		w.WorldMap[z-1][y*w.canvasWidth+x] = value + 1
 		if z > int(w.HeightMap[y*w.canvasWidth+x]) {
 			w.HeightMap[y*w.canvasWidth+x] = uint8(z)
+			w.HeightBase[y*w.canvasWidth+x] = float32(z)
+			w.SlopeX[y*w.canvasWidth+x] = 0
+			w.SlopeY[y*w.canvasWidth+x] = 0
 		}
 	} else {
 		// fmt.Println("NG", z-1 ,int(w.HeightMap[y*w.canvasWidth+x]))
@@ -116,6 +139,17 @@ func (w *World) SetValue(x, y, z int, value uint8) {
 
 	// op := &ebiten.DrawImageOptions{}
 	// me.texture.DrawImage(me.canvas, op)
+}
+
+func (w *World) SetHeightPlane(x, y int, base, slopeX, slopeY float32) bool {
+	if x < 0 || y < 0 || x >= w.canvasWidth || y >= w.canvasHeight {
+		return false
+	}
+	idx := y*w.canvasWidth + x
+	w.HeightBase[idx] = base
+	w.SlopeX[idx] = slopeX
+	w.SlopeY[idx] = slopeY
+	return true
 }
 
 /*
