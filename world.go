@@ -75,17 +75,55 @@ func (w *World) BuildHeightMapFromWorldMap() {
 			}
 		}
 		w.HeightMap[i] = uint8(height)
-		w.HeightBase[i] = float32(height)
-		w.SlopeX[i] = 0
-		w.SlopeY[i] = 0
 	}
+	w.SyncHeightPlanesFromHeightMap()
 }
 
 func (w *World) SyncHeightPlanesFromHeightMap() {
-	for i, h := range w.HeightMap {
-		w.HeightBase[i] = float32(h)
-		w.SlopeX[i] = 0
-		w.SlopeY[i] = 0
+	hAt := func(x, y int) float32 {
+		if x < 0 {
+			x = 0
+		} else if x >= w.canvasWidth {
+			x = w.canvasWidth - 1
+		}
+		if y < 0 {
+			y = 0
+		} else if y >= w.canvasHeight {
+			y = w.canvasHeight - 1
+		}
+		return float32(w.HeightMap[y*w.canvasWidth+x])
+	}
+	clampSlope := func(v float32) float32 {
+		if v < -1 {
+			return -1
+		}
+		if v > 1 {
+			return 1
+		}
+		return v
+	}
+
+	for y := 0; y < w.canvasHeight; y++ {
+		for x := 0; x < w.canvasWidth; x++ {
+			idx := y*w.canvasWidth + x
+			h := hAt(x, y)
+			dx := (hAt(x+1, y) - hAt(x-1, y)) * 0.5
+			dy := (hAt(x, y+1) - hAt(x, y-1)) * 0.5
+			if x == 0 {
+				dx = hAt(x+1, y) - h
+			} else if x == w.canvasWidth-1 {
+				dx = h - hAt(x-1, y)
+			}
+			if y == 0 {
+				dy = hAt(x, y+1) - h
+			} else if y == w.canvasHeight-1 {
+				dy = h - hAt(x, y-1)
+			}
+
+			w.HeightBase[idx] = h
+			w.SlopeX[idx] = clampSlope(dx)
+			w.SlopeY[idx] = clampSlope(dy)
+		}
 	}
 }
 

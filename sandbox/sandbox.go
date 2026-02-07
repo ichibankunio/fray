@@ -64,6 +64,7 @@ func (sm *SandboxManager) PlaceBlock() {
 
 	sm.MapEditor.PrintHeightMapOnAlphaLayer(sm.Renderer.Wld.HeightMap, sm.Renderer.Textures[1].Src)
 	sm.MapEditor.PrintWorldMap(sm.Renderer.Wld.WorldMap, sm.Renderer.Textures[2].Src)
+	sm.Renderer.Wld.SyncHeightPlanesFromHeightMap()
 	sm.MapEditor.PrintHeightPlaneMap(sm.Renderer.Wld.HeightBase, sm.Renderer.Wld.SlopeX, sm.Renderer.Wld.SlopeY, sm.Renderer.Textures[3].Src)
 }
 
@@ -80,6 +81,7 @@ func (sm *SandboxManager) DeleteBlock() {
 	sm.Renderer.Wld.DeleteValue(x, y, z)
 	sm.MapEditor.PrintHeightMapOnAlphaLayer(sm.Renderer.Wld.HeightMap, sm.Renderer.Textures[1].Src)
 	sm.MapEditor.PrintWorldMap(sm.Renderer.Wld.WorldMap, sm.Renderer.Textures[2].Src)
+	sm.Renderer.Wld.SyncHeightPlanesFromHeightMap()
 	sm.MapEditor.PrintHeightPlaneMap(sm.Renderer.Wld.HeightBase, sm.Renderer.Wld.SlopeX, sm.Renderer.Wld.SlopeY, sm.Renderer.Textures[3].Src)
 }
 
@@ -109,11 +111,13 @@ func (sm *SandboxManager) UpdateMapEdit() {
 
 		sm.MapEditor.PrintHeightMapOnAlphaLayer(sm.Renderer.Wld.HeightMap, sm.Renderer.Textures[1].Src)
 		sm.MapEditor.PrintWorldMap(sm.Renderer.Wld.WorldMap, sm.Renderer.Textures[2].Src)
+		sm.Renderer.Wld.SyncHeightPlanesFromHeightMap()
 		sm.MapEditor.PrintHeightPlaneMap(sm.Renderer.Wld.HeightBase, sm.Renderer.Wld.SlopeX, sm.Renderer.Wld.SlopeY, sm.Renderer.Textures[3].Src)
 	} else if inpututil.IsMouseButtonJustPressed(ebiten.MouseButtonLeft) {
 		sm.Renderer.Wld.DeleteValue(x, y, z)
 		sm.MapEditor.PrintHeightMapOnAlphaLayer(sm.Renderer.Wld.HeightMap, sm.Renderer.Textures[1].Src)
 		sm.MapEditor.PrintWorldMap(sm.Renderer.Wld.WorldMap, sm.Renderer.Textures[2].Src)
+		sm.Renderer.Wld.SyncHeightPlanesFromHeightMap()
 		sm.MapEditor.PrintHeightPlaneMap(sm.Renderer.Wld.HeightBase, sm.Renderer.Wld.SlopeX, sm.Renderer.Wld.SlopeY, sm.Renderer.Textures[3].Src)
 	}
 }
