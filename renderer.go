@@ -514,13 +514,15 @@ func (r *Renderer) UpdateCamPos(playerPos vec3.Vec3) {
 
 	} else if ebiten.IsKeyPressed(ebiten.KeyD) || r.Stk.Input[0] == STICK_RIGHT {
 		// } else if ebiten.IsKeyPressed(ebiten.KeyD) || ebiten.GamepadAxisValue(0, 0) > 0.1 || r.Stk.Input[0] == STICK_RIGHT {
-		r.Cam.v = r.collisionCheckedDelta(playerPos, r.Cam.plane.Scale(-r.Cam.Speed), r.Cam.collisionDistance)
+		strafeDir := vec2.New(-r.Cam.dir.Y, r.Cam.dir.X)
+		r.Cam.v = r.collisionCheckedDelta(playerPos, strafeDir.Scale(r.Cam.Speed), r.Cam.collisionDistance)
 		// r.Cam.pos = r.Cam.pos.Add(delta)
 		// r.Cam.subjectPos = r.Cam.subjectPos.Add(delta)
 
 	} else if ebiten.IsKeyPressed(ebiten.KeyA) || r.Stk.Input[0] == STICK_LEFT {
 		// } else if ebiten.IsKeyPressed(ebiten.KeyA) || ebiten.GamepadAxisValue(0, 0) < -0.1 || r.Stk.Input[0] == STICK_LEFT {
-		r.Cam.v = r.collisionCheckedDelta(playerPos, r.Cam.plane.Scale(r.Cam.Speed), r.Cam.collisionDistance)
+		strafeDir := vec2.New(-r.Cam.dir.Y, r.Cam.dir.X)
+		r.Cam.v = r.collisionCheckedDelta(playerPos, strafeDir.Scale(-r.Cam.Speed), r.Cam.collisionDistance)
 		// r.Cam.pos = r.Cam.pos.Add(delta)
 		// r.Cam.subjectPos = r.Cam.subjectPos.Add(delta)
 

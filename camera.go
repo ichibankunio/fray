@@ -106,7 +106,7 @@ func (c *Camera) Init(screenWidth, screenHeight float64) {
 
 	c.zoomed = false
 
-	c.Speed = 6.0
+	c.Speed = 10.0
 	c.v = vec3.New(0, 0, 0)
 	c.vZ = -1.0
 	// c.posZ = 0
