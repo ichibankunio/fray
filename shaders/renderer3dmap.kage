@@ -127,9 +127,10 @@ func Fragment(dstPos vec4, srcPos vec2, color vec4) vec4 {
             
             
             wallX := fract(side * (Pos.x + perpWallDist*rayDir.x) + (1.0 - side) * (Pos.y + perpWallDist*rayDir.y))
+            wallXTex := wallX
 
     if (side < 0.5 && rayDir.x < 0.0) || (side > 0.5 && rayDir.y > 0.0) {
-        wallX = 1.0 - wallX
+        wallXTex = 1.0 - wallXTex
     }
 
             lastRenderedWallTop := ScreenSize.y / perpWallDist * wallHeightAtRayPosition
@@ -202,7 +203,7 @@ func Fragment(dstPos vec4, srcPos vec2, color vec4) vec4 {
                     return vec4(5.0/255.0, 151.0/255.0, 242.0/255.0, 1)
                     // discard()
                 }
-                posOnTexture := vec2(wallX + mod(wallTextureID, tilesPerRow), wallY + floor(wallTextureID/tilesPerRow))*TexSize
+                posOnTexture := vec2(wallXTex + mod(wallTextureID, tilesPerRow), wallY + floor(wallTextureID/tilesPerRow))*TexSize
                 
                 clr := imageSrc1UnsafeAt(texOrigin + posOnTexture)
 
