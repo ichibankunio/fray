@@ -43,6 +43,66 @@ func (r *Renderer) UpdateCamRotationByMouse() {
 	r.Stk.mousePosLastFrame = current
 }
 
+func (r *Renderer) rotateHorizontalByRightStick(rel vec2.Vec2) {
+	const deadZone = 8.0
+	const maxOffset = 44.0
+	const maxSpeed = 0.015
+
+	absX := math.Abs(rel.X)
+	if absX <= deadZone {
+		r.Stk.Input[1] = STICK_NONE
+		return
+	}
+
+	if rel.X > 0 {
+		r.Stk.Input[1] = STICK_RIGHT
+	} else {
+		r.Stk.Input[1] = STICK_LEFT
+	}
+
+	normalized := (absX - deadZone) / (maxOffset - deadZone)
+	if normalized > 1 {
+		normalized = 1
+	}
+
+	speed := maxSpeed * normalized
+	if rel.X < 0 {
+		speed = -speed
+	}
+
+	r.Cam.RotateHorizontalAroundSubject(speed)
+}
+
+func (r *Renderer) rotateVerticalByRightStick(rel vec2.Vec2) {
+	const deadZone = 12.0
+	const maxOffset = 44.0
+	const maxSpeed = 0.9
+	const maxPitch = 64.0
+
+	absY := math.Abs(rel.Y)
+	if absY <= deadZone {
+		return
+	}
+
+	normalized := (absY - deadZone) / (maxOffset - deadZone)
+	if normalized > 1 {
+		normalized = 1
+	}
+
+	speed := maxSpeed * normalized
+	if rel.Y < 0 {
+		speed = -speed
+	}
+
+	r.Cam.RotateVertical(speed)
+
+	if r.Cam.pitch > maxPitch {
+		r.Cam.pitch = maxPitch
+	} else if r.Cam.pitch < -maxPitch {
+		r.Cam.pitch = -maxPitch
+	}
+}
+
 func (r *Renderer) UpdateCamRotationAroundSubjectByTouch(solid bool) {
 	if len(inpututil.AppendJustPressedTouchIDs(nil)) > 0 {
 		for _, id := range inpututil.AppendJustPressedTouchIDs(nil) {
@@ -119,26 +179,8 @@ func (r *Renderer) UpdateCamRotationAroundSubjectByTouch(solid bool) {
 		current := vec2.New(float64(x), float64(y))
 		rel := current.Sub(r.Stk.pos[1])
 
-		if rel.X > 0 && math.Abs(rel.Y/rel.X) < 0.8 {
-			r.Stk.Input[1] = STICK_RIGHT
-		} else if rel.X < 0 && math.Abs(rel.Y/rel.X) < 0.8 {
-			r.Stk.Input[1] = STICK_LEFT
-		} else if rel.Y > 0 && math.Abs(rel.X/rel.Y) < 0.8 {
-			r.Stk.Input[1] = STICK_DOWN
-		} else if rel.Y < 0 && math.Abs(rel.X/rel.Y) < 0.8 {
-			r.Stk.Input[1] = STICK_UP
-		} else {
-			r.Stk.Input[1] = STICK_NONE
-		}
-
-		// fmt.Printf("%f, %f\n", r.Stk.pos[1], current)
-
-		if solid {
-			r.UpdateCamRotationBySolidInput(SolidInput(r.Stk.Input[1]))
-		} else {
-			r.Cam.RotateHorizontalAroundSubject(rel.X * 0.0001)
-			r.Cam.RotateVertical(rel.Y * 0.05)
-		}
+		r.rotateHorizontalByRightStick(rel)
+		r.rotateVerticalByRightStick(rel)
 
 		r.Stk.mousePosLastFrame = current
 
@@ -283,22 +325,8 @@ func (r *Renderer) UpdateCamRotationByTouch(solid bool) {
 
 		// fmt.Printf("%f, %f\n", r.Stk.pos[1], current)
 
-		if solid {
-			if rel.X > 0 {
-				r.UpdateCamRotationBySolidInput(SOLID_INPUT_EAST)
-			} else if rel.X < 0 {
-				r.UpdateCamRotationBySolidInput(SOLID_INPUT_WEST)
-			}
-
-			if rel.Y > 0 {
-				r.UpdateCamRotationBySolidInput(SOLID_INPUT_NORTH)
-			} else if rel.Y < 0 {
-				r.UpdateCamRotationBySolidInput(SOLID_INPUT_SOUTH)
-			}
-		} else {
-			r.Cam.RotateHorizontal(rel.X * 0.0005)
-			r.Cam.RotateVertical(rel.Y * 0.5)
-		}
+		r.rotateHorizontalByRightStick(rel)
+		r.rotateVerticalByRightStick(rel)
 
 		if inpututil.IsMouseButtonJustReleased(ebiten.MouseButtonLeft) {
 			r.Stk.visible[1] = false
