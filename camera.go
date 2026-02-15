@@ -76,6 +76,17 @@ func (c *Camera) GetPitch() float32 {
 	return c.pitch
 }
 
+func (c *Camera) SetPitch(pitch float32) {
+	c.pitch = pitch
+}
+
+func (c *Camera) SetPose(pos vec3.Vec3, dir vec2.Vec2, plane vec2.Vec2, pitch float32) {
+	c.dir = dir
+	c.plane = plane
+	c.pitch = pitch
+	c.SetPos(pos)
+}
+
 func (c *Camera) SetDafaultDistanceBetweenSubjectCamera(distance float64) {
 	c.distanceBetweenSubjectCamera = distance
 }
