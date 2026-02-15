@@ -62,6 +62,7 @@ type Renderer struct {
 
 	CeilingHeight float32
 	CeilingTextureID float32
+	DefaultFloorColor [3]float32
 }
 
 type AimDirection int
@@ -119,6 +120,7 @@ func (r *Renderer) Init(screenWidth, screenHeight float64, canvasWidth, canvasHe
 	r.HandTextureID = 0
 	r.CeilingHeight = 0
 	r.CeilingTextureID = -1
+	r.DefaultFloorColor = [3]float32{240.0 / 255.0, 240.0 / 255.0, 240.0 / 255.0}
 }
 
 func (r *Renderer) SetHandTextureID(id int) {
@@ -135,6 +137,18 @@ func (r *Renderer) SetCeilingHeight(h float32) {
 
 func (r *Renderer) SetCeilingTextureID(id int) {
 	r.CeilingTextureID = float32(id)
+}
+
+func (r *Renderer) SetDefaultFloorColor(clr color.Color) {
+	if clr == nil {
+		return
+	}
+	rr, gg, bb, _ := clr.RGBA()
+	r.DefaultFloorColor = [3]float32{
+		float32(rr) / 65535.0,
+		float32(gg) / 65535.0,
+		float32(bb) / 65535.0,
+	}
 }
 
 func (r *Renderer) NewTextureSheet(src []*ebiten.Image) *ImageSrc {
@@ -489,6 +503,7 @@ func (r *Renderer) renderWall(screen *ebiten.Image) {
 		"WorldSize":     []float32{float32(r.Wld.canvasWidth), float32(r.Wld.canvasHeight)},
 		"CeilingHeight": r.CeilingHeight,
 		"CeilingTextureID": r.CeilingTextureID,
+		"DefaultFloorColor": []float32{r.DefaultFloorColor[0], r.DefaultFloorColor[1], r.DefaultFloorColor[2]},
 	}
 
 	op.Images[0] = r.Textures[0].Src //wall(texture), sprite(texture)
