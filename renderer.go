@@ -64,6 +64,7 @@ type Renderer struct {
 	CeilingTextureID float32
 	DefaultFloorColor [3]float32
 	AimHighlightEnabled bool
+	ControlInputEnabled bool
 }
 
 type AimDirection int
@@ -123,6 +124,7 @@ func (r *Renderer) Init(screenWidth, screenHeight float64, canvasWidth, canvasHe
 	r.CeilingTextureID = -1
 	r.DefaultFloorColor = [3]float32{240.0 / 255.0, 240.0 / 255.0, 240.0 / 255.0}
 	r.AimHighlightEnabled = true
+	r.ControlInputEnabled = true
 }
 
 func (r *Renderer) SetHandTextureID(id int) {
@@ -155,6 +157,19 @@ func (r *Renderer) SetDefaultFloorColor(clr color.Color) {
 
 func (r *Renderer) SetAimHighlightEnabled(enabled bool) {
 	r.AimHighlightEnabled = enabled
+}
+
+func (r *Renderer) SetControlInputEnabled(enabled bool) {
+	r.ControlInputEnabled = enabled
+	if enabled {
+		return
+	}
+	r.Stk.Input[0] = STICK_NONE
+	r.Stk.Input[1] = STICK_NONE
+	r.Stk.visible[0] = false
+	r.Stk.visible[1] = false
+	r.Stk.touchIDs[0] = -1
+	r.Stk.touchIDs[1] = -1
 }
 
 func (r *Renderer) NewTextureSheet(src []*ebiten.Image) *ImageSrc {
@@ -419,12 +434,14 @@ func (r *Renderer) Update() {
 	// r.UpdateCamRotationByMouse()
 	// r.UpdateCamRotationByTouch()
 
-	if runtime.GOOS == "darwin" || runtime.GOOS == "linux" {
-		r.UpdateCamRotationAroundSubjectByMouse()
-	} else {
-		r.UpdateCamRotationAroundSubjectByTouch(true)
+	if r.ControlInputEnabled {
+		if runtime.GOOS == "darwin" || runtime.GOOS == "linux" {
+			r.UpdateCamRotationAroundSubjectByMouse()
+		} else {
+			r.UpdateCamRotationAroundSubjectByTouch(true)
+		}
+		r.UpdateCamPos(r.Cam.subjectPos)
 	}
-	r.UpdateCamPos(r.Cam.subjectPos)
 	r.UpdateCamPosZ()
 	// r.UpdateCameraPos()
 
