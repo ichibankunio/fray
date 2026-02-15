@@ -63,6 +63,7 @@ type Renderer struct {
 	CeilingHeight float32
 	CeilingTextureID float32
 	DefaultFloorColor [3]float32
+	AimHighlightEnabled bool
 }
 
 type AimDirection int
@@ -121,6 +122,7 @@ func (r *Renderer) Init(screenWidth, screenHeight float64, canvasWidth, canvasHe
 	r.CeilingHeight = 0
 	r.CeilingTextureID = -1
 	r.DefaultFloorColor = [3]float32{240.0 / 255.0, 240.0 / 255.0, 240.0 / 255.0}
+	r.AimHighlightEnabled = true
 }
 
 func (r *Renderer) SetHandTextureID(id int) {
@@ -149,6 +151,10 @@ func (r *Renderer) SetDefaultFloorColor(clr color.Color) {
 		float32(gg) / 65535.0,
 		float32(bb) / 65535.0,
 	}
+}
+
+func (r *Renderer) SetAimHighlightEnabled(enabled bool) {
+	r.AimHighlightEnabled = enabled
 }
 
 func (r *Renderer) NewTextureSheet(src []*ebiten.Image) *ImageSrc {
@@ -504,6 +510,10 @@ func (r *Renderer) renderWall(screen *ebiten.Image) {
 		"CeilingHeight": r.CeilingHeight,
 		"CeilingTextureID": r.CeilingTextureID,
 		"DefaultFloorColor": []float32{r.DefaultFloorColor[0], r.DefaultFloorColor[1], r.DefaultFloorColor[2]},
+		"AimHighlightEnabled": float32(0),
+	}
+	if r.AimHighlightEnabled {
+		op.Uniforms["AimHighlightEnabled"] = float32(1)
 	}
 
 	op.Images[0] = r.Textures[0].Src //wall(texture), sprite(texture)

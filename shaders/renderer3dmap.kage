@@ -19,6 +19,7 @@ var WorldSize vec2
 var CeilingHeight float//ceiling height in blocks (<= 0 disables ceiling)
 var CeilingTextureID float//ceiling texture index in imageSrc1 atlas
 var DefaultFloorColor vec3
+var AimHighlightEnabled float
 
 var AimPos vec3
 var HandTextureID float
@@ -198,7 +199,7 @@ func Fragment(dstPos vec4, srcPos vec2, color vec4) vec4 {
 
                 //aim(block with mark)
                 // if rayHeightFloor == AimPos.z-1 && mapPos == AimPos.xy && (wallX < 0.03125 || wallX > 0.96875 || wallY < 0.03125 || wallY > 0.96875) {
-                if rayHeightFloor == AimPos.z-1 && mapPos == AimPos.xy && (wallX < 0.03125 || wallX > 0.96875 || wallY < 0.03125 || wallY > 0.96875) {
+                if AimHighlightEnabled > 0.5 && rayHeightFloor == AimPos.z-1 && mapPos == AimPos.xy && (wallX < 0.03125 || wallX > 0.96875 || wallY < 0.03125 || wallY > 0.96875) {
                 // if rayHeightFloor == AimPos.z-1 && mapPos == AimPos.xy && (wallX < 0.03125 || wallX > 0.96875 || wallY < 0.03125 || wallY > 0.96875) && rayHeightFract < 0.01 {
                     // return vec4(1, 0, 0, 1)
                     return vec4(5.0/255.0, 151.0/255.0, 242.0/255.0, 1)
@@ -241,7 +242,7 @@ func Fragment(dstPos vec4, srcPos vec2, color vec4) vec4 {
                     return vec4(floor(currentFloor).x/255, floor(currentFloor).y/255, wallHeightAtRayPosition/255, 4.0/255)
                 }
 
-                if wallHeightAtRayPosition == AimPos.z && floor(currentFloor) == AimPos.xy && (fract(currentFloor.x) < 0.03125 || fract(currentFloor.y) < 0.03125 || fract(currentFloor.x) > 0.96875 || fract(currentFloor.y) > 0.96875) {
+                if AimHighlightEnabled > 0.5 && wallHeightAtRayPosition == AimPos.z && floor(currentFloor) == AimPos.xy && (fract(currentFloor.x) < 0.03125 || fract(currentFloor.y) < 0.03125 || fract(currentFloor.x) > 0.96875 || fract(currentFloor.y) > 0.96875) {
                 // if mapPos == AimPos.xy && (fract(currentFloor.x) < 0.03125 || fract(currentFloor.y) < 0.03125 || fract(currentFloor.x) > 0.96875 || fract(currentFloor.y) > 0.96875) {
                     // discard()
                     return vec4(5.0/255.0, 151.0/255.0, 242.0/255.0, 1)
