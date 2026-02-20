@@ -8,6 +8,7 @@ var Pos vec2//camera positon(x, y) (one block = 1)
 var PosZ float//Camera position z (PosZ = 1 means camera is at one block above the PosZ = 0)
 var Dir vec2//camera dir
 var Plane vec2//camera plane
+var POVScale float//horizontal POV/FOV scale (1.0 = default)
 
 var Pitch float
 
@@ -42,7 +43,7 @@ func Fragment(dstPos vec4, srcPos vec2, color vec4) vec4 {
 
     texOrigin := imageSrc0Origin()
     tilesPerRow := max(1.0, floor(ScreenSize.x / TexSize))
-    cameraX := 2.0 * (1.0 - dstPos.x / ScreenSize.x) - 1.0 //x-coordinate in camera space
+    cameraX := (2.0 * (1.0 - dstPos.x / ScreenSize.x) - 1.0) * POVScale //x-coordinate in camera space
 
     rayDir := Dir + Plane * cameraX
 

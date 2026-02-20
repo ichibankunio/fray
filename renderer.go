@@ -63,6 +63,7 @@ type Renderer struct {
 	CeilingHeight float32
 	CeilingTextureID float32
 	DefaultFloorColor [3]float32
+	POVScale float32
 	AimHighlightEnabled bool
 	ControlInputEnabled bool
 }
@@ -123,6 +124,7 @@ func (r *Renderer) Init(screenWidth, screenHeight float64, canvasWidth, canvasHe
 	r.CeilingHeight = 0
 	r.CeilingTextureID = -1
 	r.DefaultFloorColor = [3]float32{240.0 / 255.0, 240.0 / 255.0, 240.0 / 255.0}
+	r.POVScale = 1
 	r.AimHighlightEnabled = true
 	r.ControlInputEnabled = true
 }
@@ -157,6 +159,13 @@ func (r *Renderer) SetDefaultFloorColor(clr color.Color) {
 
 func (r *Renderer) SetAimHighlightEnabled(enabled bool) {
 	r.AimHighlightEnabled = enabled
+}
+
+func (r *Renderer) SetPOVScale(scale float32) {
+	if scale <= 0 {
+		scale = 1
+	}
+	r.POVScale = scale
 }
 
 func (r *Renderer) SetControlInputEnabled(enabled bool) {
@@ -514,6 +523,7 @@ func (r *Renderer) renderWall(screen *ebiten.Image) {
 		"Pos":        []float32{float32(r.Cam.pos.X / float64(r.texSize)), float32(r.Cam.pos.Y / float64(r.texSize))},
 		"Dir":        []float32{float32(r.Cam.dir.X), float32(r.Cam.dir.Y)},
 		"Plane":      []float32{float32(r.Cam.plane.X), float32(r.Cam.plane.Y)},
+		"POVScale":   r.POVScale,
 
 		"PosZ":               float32(r.Cam.pos.Z / float64(r.texSize)),
 		"Pitch":              r.Cam.pitch,
