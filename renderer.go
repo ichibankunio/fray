@@ -23,6 +23,18 @@ var shaderByte []byte
 //go:embed shaders/renderWithNoTextures.kage
 var shaderByte2 []byte
 
+//go:embed shaders/pseudoShadow.kage
+var pseudoShadowShaderByte []byte
+
+type PseudoShadowConfig struct {
+	Enabled          bool
+	LightDir         [2]float32
+	GroundY          float32
+	ShadowStrength   float32
+	VignetteStrength float32
+	TintStrength     float32
+}
+
 type Renderer struct {
 	Cam *Camera
 	Stk *Stick
@@ -38,6 +50,10 @@ type Renderer struct {
 	shader2 *ebiten.Shader
 
 	Textures [4]*ImageSrc
+
+	pseudoShadowShader *ebiten.Shader
+	worldBuffer        *ebiten.Image
+	pseudoShadowConfig PseudoShadowConfig
 
 	aimPos        vec3.Vec3
 	aimDirection  AimDirection
@@ -55,15 +71,15 @@ type Renderer struct {
 	jumpCounter  int
 	JumpCountMax int
 
-	SpriteParameterNum int
-	SpriteParameters   []float32
-	lastSpriteParameters []float32
+	SpriteParameterNum     int
+	SpriteParameters       []float32
+	lastSpriteParameters   []float32
 	spriteParametersBuffer []float32
 
-	CeilingHeight float32
-	CeilingTextureID float32
-	DefaultFloorColor [3]float32
-	POVScale float32
+	CeilingHeight       float32
+	CeilingTextureID    float32
+	DefaultFloorColor   [3]float32
+	POVScale            float32
 	AimHighlightEnabled bool
 	ControlInputEnabled bool
 }
@@ -106,6 +122,8 @@ func (r *Renderer) Init(screenWidth, screenHeight float64, canvasWidth, canvasHe
 	if err != nil {
 		panic(err)
 	}
+	r.pseudoShadowShader, _ = ebiten.NewShader(pseudoShadowShaderByte)
+	r.worldBuffer = ebiten.NewImage(int(r.screenWidth), int(r.screenHeight))
 
 	r.counter = 0
 	// r.playerAnimationIndex = 16
@@ -127,6 +145,21 @@ func (r *Renderer) Init(screenWidth, screenHeight float64, canvasWidth, canvasHe
 	r.POVScale = 1
 	r.AimHighlightEnabled = true
 	r.ControlInputEnabled = true
+	r.pseudoShadowConfig = defaultPseudoShadowConfig(float32(r.screenHeight))
+	if r.pseudoShadowShader == nil {
+		r.pseudoShadowConfig.Enabled = false
+	}
+}
+
+func defaultPseudoShadowConfig(screenHeight float32) PseudoShadowConfig {
+	return PseudoShadowConfig{
+		Enabled:          false,
+		LightDir:         [2]float32{0.58, -1.0},
+		GroundY:          screenHeight * 0.7,
+		ShadowStrength:   0.34,
+		VignetteStrength: 0.65,
+		TintStrength:     0.12,
+	}
 }
 
 func (r *Renderer) SetHandTextureID(id int) {
@@ -179,6 +212,35 @@ func (r *Renderer) SetControlInputEnabled(enabled bool) {
 	r.Stk.visible[1] = false
 	r.Stk.touchIDs[0] = -1
 	r.Stk.touchIDs[1] = -1
+}
+
+func (r *Renderer) SetPseudoShadowEnabled(enabled bool) {
+	r.pseudoShadowConfig.Enabled = enabled && r.pseudoShadowShader != nil
+}
+
+func (r *Renderer) SetPseudoShadowConfig(cfg PseudoShadowConfig) {
+	if cfg.GroundY == 0 {
+		cfg.GroundY = float32(r.screenHeight) * 0.7
+	}
+	cfg.ShadowStrength = clamp01(cfg.ShadowStrength)
+	cfg.VignetteStrength = clamp01(cfg.VignetteStrength)
+	cfg.TintStrength = clamp01(cfg.TintStrength)
+	cfg.Enabled = cfg.Enabled && r.pseudoShadowShader != nil
+	r.pseudoShadowConfig = cfg
+}
+
+func (r *Renderer) GetPseudoShadowConfig() PseudoShadowConfig {
+	return r.pseudoShadowConfig
+}
+
+func clamp01(v float32) float32 {
+	if v < 0 {
+		return 0
+	}
+	if v > 1 {
+		return 1
+	}
+	return v
 }
 
 func (r *Renderer) NewTextureSheet(src []*ebiten.Image) *ImageSrc {
@@ -491,9 +553,18 @@ func (r *Renderer) syncLastSpriteParameters() {
 }
 
 func (r *Renderer) Draw(screen *ebiten.Image) {
-	r.renderWall(screen)
-
-	r.GetAimPositionFromScreen(screen)
+	if r.pseudoShadowConfig.Enabled && r.pseudoShadowShader != nil {
+		if r.worldBuffer == nil || r.worldBuffer.Bounds().Dx() != int(r.screenWidth) || r.worldBuffer.Bounds().Dy() != int(r.screenHeight) {
+			r.worldBuffer = ebiten.NewImage(int(r.screenWidth), int(r.screenHeight))
+		}
+		r.worldBuffer.Clear()
+		r.renderWall(r.worldBuffer)
+		r.GetAimPositionFromScreen(r.worldBuffer)
+		r.renderPseudoShadow(screen, r.worldBuffer)
+	} else {
+		r.renderWall(screen)
+		r.GetAimPositionFromScreen(screen)
+	}
 
 	// r.renderWithNoTextures(screen)
 
@@ -530,13 +601,13 @@ func (r *Renderer) renderWall(screen *ebiten.Image) {
 		"SpriteNum":          len(r.Wld.Sprites),
 		"SpriteParameterNum": r.SpriteParameterNum,
 
-		"AimPos":        []float32{float32(r.aimPos.X), float32(r.aimPos.Y), float32(r.aimPos.Z)},
-		"HandTextureID": float32(r.HandTextureID),
-		"TexSize":       float32(r.texSize),
-		"WorldSize":     []float32{float32(r.Wld.canvasWidth), float32(r.Wld.canvasHeight)},
-		"CeilingHeight": r.CeilingHeight,
-		"CeilingTextureID": r.CeilingTextureID,
-		"DefaultFloorColor": []float32{r.DefaultFloorColor[0], r.DefaultFloorColor[1], r.DefaultFloorColor[2]},
+		"AimPos":              []float32{float32(r.aimPos.X), float32(r.aimPos.Y), float32(r.aimPos.Z)},
+		"HandTextureID":       float32(r.HandTextureID),
+		"TexSize":             float32(r.texSize),
+		"WorldSize":           []float32{float32(r.Wld.canvasWidth), float32(r.Wld.canvasHeight)},
+		"CeilingHeight":       r.CeilingHeight,
+		"CeilingTextureID":    r.CeilingTextureID,
+		"DefaultFloorColor":   []float32{r.DefaultFloorColor[0], r.DefaultFloorColor[1], r.DefaultFloorColor[2]},
 		"AimHighlightEnabled": float32(0),
 	}
 	if r.AimHighlightEnabled {
@@ -548,6 +619,22 @@ func (r *Renderer) renderWall(screen *ebiten.Image) {
 	op.Images[2] = r.Textures[2].Src //sprite(data)
 	op.Images[3] = r.Textures[3].Src //map(data)
 	screen.DrawRectShader(int(r.screenWidth), int(r.screenHeight), r.shader, op)
+}
+
+func (r *Renderer) renderPseudoShadow(screen, src *ebiten.Image) {
+	cfg := r.pseudoShadowConfig
+	op := &ebiten.DrawRectShaderOptions{
+		Uniforms: map[string]interface{}{
+			"ScreenSize":       []float32{float32(r.screenWidth), float32(r.screenHeight)},
+			"LightDir":         []float32{cfg.LightDir[0], cfg.LightDir[1]},
+			"GroundY":          cfg.GroundY,
+			"ShadowStrength":   cfg.ShadowStrength,
+			"VignetteStrength": cfg.VignetteStrength,
+			"TintStrength":     cfg.TintStrength,
+		},
+	}
+	op.Images[0] = src
+	screen.DrawRectShader(int(r.screenWidth), int(r.screenHeight), r.pseudoShadowShader, op)
 }
 
 func (r *Renderer) UpdateCamPos(playerPos vec3.Vec3) {

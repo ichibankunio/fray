@@ -1,0 +1,38 @@
+//kage:unit pixels
+package main
+
+var ScreenSize vec2
+var LightDir vec2
+var GroundY float
+var ShadowStrength float
+var VignetteStrength float
+var TintStrength float
+
+func Fragment(dstPos vec4, srcPos vec2, color vec4) vec4 {
+	base := imageSrc0At(srcPos)
+	uv := dstPos.xy / ScreenSize
+
+	poolCenter := vec2(0.5-LightDir.x*0.08, GroundY/ScreenSize.y)
+	d := uv - poolCenter
+	d.x *= 2.4
+	d.y *= 5.4
+	contactShadow := exp(-(d.x*d.x + d.y*d.y))
+
+	groundStart := (GroundY - 220.0) / ScreenSize.y
+	groundEnd := (GroundY + 220.0) / ScreenSize.y
+	groundMask := smoothstep(groundStart, groundEnd, uv.y)
+
+	v := uv - vec2(0.5, 0.48)
+	v.x *= 1.18
+	vignette := smoothstep(0.24, 0.9, length(v))
+
+	shadow := ShadowStrength*(0.78*contactShadow*groundMask+0.46*vignette*VignetteStrength)
+	shade := clamp(1.0-shadow, 0.0, 1.0)
+
+	base.rgb *= shade
+	tintShadow := TintStrength * shadow
+	coolTint := vec3(0.92, 0.95, 1.0)
+	base.rgb = base.rgb*(1.0-tintShadow) + base.rgb*coolTint*tintShadow
+
+	return base * color
+}
