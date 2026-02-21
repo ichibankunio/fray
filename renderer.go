@@ -83,6 +83,7 @@ type Renderer struct {
 	POVScale              float32
 	AimHighlightEnabled   bool
 	ControlInputEnabled   bool
+	JumpButtonVisible     bool
 }
 
 type AimDirection int
@@ -147,6 +148,7 @@ func (r *Renderer) Init(screenWidth, screenHeight float64, canvasWidth, canvasHe
 	r.POVScale = 1
 	r.AimHighlightEnabled = true
 	r.ControlInputEnabled = true
+	r.JumpButtonVisible = true
 	r.pseudoShadowConfig = defaultPseudoShadowConfig(float32(r.screenHeight))
 	if r.pseudoShadowShader == nil {
 		r.pseudoShadowConfig.Enabled = false
@@ -222,6 +224,10 @@ func (r *Renderer) SetControlInputEnabled(enabled bool) {
 	r.Stk.visible[1] = false
 	r.Stk.touchIDs[0] = -1
 	r.Stk.touchIDs[1] = -1
+}
+
+func (r *Renderer) SetJumpButtonVisible(visible bool) {
+	r.JumpButtonVisible = visible
 }
 
 func (r *Renderer) SetPseudoShadowEnabled(enabled bool) {
@@ -536,7 +542,9 @@ func (r *Renderer) Update() {
 	}
 
 	// r.CalculateAimPosition()
-	r.jumpButton.SimpleUpdate()
+	if r.JumpButtonVisible {
+		r.jumpButton.SimpleUpdate()
+	}
 
 	r.counter++
 }
@@ -590,7 +598,9 @@ func (r *Renderer) Draw(screen *ebiten.Image) {
 	// r.Stk.Draw(screen)
 	// screen.DrawImage(r.textures[0], nil)
 
-	r.jumpButton.Draw(screen)
+	if r.JumpButtonVisible {
+		r.jumpButton.Draw(screen)
+	}
 }
 
 func (r *Renderer) DrawTopView(screen *ebiten.Image) {
@@ -691,7 +701,8 @@ func (r *Renderer) IsRunningOnGround() bool {
 func (r *Renderer) UpdateCamPosZ() {
 	// if inpututil.IsKeyJustReleased(ebiten.KeySpace) || flib.IsThereJustReleasedTouch(r.jumpButton.Spr.Pos, vec2.New(float64(r.jumpButton.Spr.Img.Bounds().Dx()), float64(r.jumpButton.Spr.Img.Bounds().Dy()))) {
 	// if (inpututil.IsKeyJustReleased(ebiten.KeySpace) || flib.IsThereJustReleasedTouch(r.jumpButton.Spr.Pos, vec2.New(100, 100))) && r.Cam.subjectPos.Z - (r.GetGroundHeight(r.Cam.subjectPos)+r.Cam.shooterHeight) == 0 {
-	if (inpututil.IsKeyJustReleased(ebiten.KeySpace) || r.jumpButton.IsTouchJustReleased()) && r.jumpCounter < r.JumpCountMax {
+	touchJump := r.JumpButtonVisible && r.jumpButton.IsTouchJustReleased()
+	if (inpututil.IsKeyJustReleased(ebiten.KeySpace) || touchJump) && r.jumpCounter < r.JumpCountMax {
 		r.Cam.vZ = 6
 		r.jumpCounter++
 	}
