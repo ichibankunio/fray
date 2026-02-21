@@ -116,6 +116,23 @@ func (r *Renderer) castRayMultiHeight(dir, plane vec2.Vec2, pos vec3.Vec3, hitTy
 	// return perpWallDist, r.Wld.levelUint8[1][int(mapPos.Y)*r.Wld.width+int(mapPos.X)]//(当たった壁までの距離, その壁の高さ)
 }
 
+func (r *Renderer) shouldBlockApproachToWall(ray *Ray, towardWallDelta float64, collisionBuffer float64, pos vec3.Vec3, climbable float64) bool {
+	if towardWallDelta <= 0 {
+		return false
+	}
+	if float64(ray.detectedWallHeight)-((pos.Z-r.Cam.shooterHeight)/float64(r.texSize)) <= climbable {
+		return false
+	}
+
+	currentDistanceToWall := math.Sqrt(ray.squaredEuclidean)
+	nextDistanceToWall := currentDistanceToWall - towardWallDelta/float64(r.texSize)
+	if nextDistanceToWall >= currentDistanceToWall {
+		return false
+	}
+
+	return nextDistanceToWall <= collisionBuffer
+}
+
 func (r *Renderer) collisionCheckedDelta(pos vec3.Vec3, delta vec2.Vec2, collisionBuffer float64) vec3.Vec3 { //deltaは絶対値が大きすぎるとうまくいかない（？）
 	climbable := 0.0
 	// distanceToSubject := 0.0
@@ -123,7 +140,7 @@ func (r *Renderer) collisionCheckedDelta(pos vec3.Vec3, delta vec2.Vec2, collisi
 	if delta.X > 0 {
 		// ray := r.castRayMultiHeight(vec2.New(1, 0), r.Cam.plane, pos.Add(vec3.New(r.Cam.dir.X, r.Cam.dir.Y, 0).Scale(distanceToSubject)))
 		ray := r.castRayMultiHeight(vec2.New(1, 0), r.Cam.plane, pos.Add(vec3.New(0, 0, -r.Cam.shooterHeight)), RAY_HIT_UP)
-		if ray.squaredEuclidean <= collisionBuffer*collisionBuffer && float64(ray.detectedWallHeight)-((pos.Z-r.Cam.shooterHeight)/float64(r.texSize)) > climbable {
+		if r.shouldBlockApproachToWall(ray, delta.X, collisionBuffer, pos, climbable) {
 			// delta.X = dist - collisionBuffer
 			delta.X = 0
 		}
@@ -133,7 +150,7 @@ func (r *Renderer) collisionCheckedDelta(pos vec3.Vec3, delta vec2.Vec2, collisi
 		// ray := r.castRayMultiHeight(vec2.New(-1, 0), r.Cam.plane, pos.Add(vec3.New(r.Cam.dir.X, r.Cam.dir.Y, 0).Scale(distanceToSubject)))
 		ray := r.castRayMultiHeight(vec2.New(-1, 0), r.Cam.plane, pos.Add(vec3.New(0, 0, -r.Cam.shooterHeight)), RAY_HIT_UP)
 
-		if ray.squaredEuclidean <= collisionBuffer*collisionBuffer && float64(ray.detectedWallHeight)-((pos.Z-r.Cam.shooterHeight)/float64(r.texSize)) > climbable {
+		if r.shouldBlockApproachToWall(ray, -delta.X, collisionBuffer, pos, climbable) {
 
 			// delta.X = collisionBuffer - dist
 			delta.X = 0
@@ -145,7 +162,7 @@ func (r *Renderer) collisionCheckedDelta(pos vec3.Vec3, delta vec2.Vec2, collisi
 		// ray := r.castRayMultiHeight(vec2.New(0, 1), r.Cam.plane, pos.Add(vec3.New(r.Cam.dir.X, r.Cam.dir.Y, 0).Scale(distanceToSubject)))
 		ray := r.castRayMultiHeight(vec2.New(0, 1), r.Cam.plane, pos.Add(vec3.New(0, 0, -r.Cam.shooterHeight)), RAY_HIT_UP)
 
-		if ray.squaredEuclidean <= collisionBuffer*collisionBuffer && float64(ray.detectedWallHeight)-((pos.Z-r.Cam.shooterHeight)/float64(r.texSize)) > climbable {
+		if r.shouldBlockApproachToWall(ray, delta.Y, collisionBuffer, pos, climbable) {
 
 			// delta.Y = dist - collisionBuffer
 			delta.Y = 0
@@ -156,7 +173,7 @@ func (r *Renderer) collisionCheckedDelta(pos vec3.Vec3, delta vec2.Vec2, collisi
 
 		ray := r.castRayMultiHeight(vec2.New(0, -1), r.Cam.plane, pos.Add(vec3.New(0, 0, -r.Cam.shooterHeight)), RAY_HIT_UP)
 
-		if ray.squaredEuclidean <= collisionBuffer*collisionBuffer && float64(ray.detectedWallHeight)-((pos.Z-r.Cam.shooterHeight)/float64(r.texSize)) > climbable {
+		if r.shouldBlockApproachToWall(ray, -delta.Y, collisionBuffer, pos, climbable) {
 
 			// delta.Y = collisionBuffer - dist
 			delta.Y = 0

@@ -91,6 +91,20 @@ func (c *Camera) SetDafaultDistanceBetweenSubjectCamera(distance float64) {
 	c.distanceBetweenSubjectCamera = distance
 }
 
+// SetMinDistanceToWallWhileApproaching configures the minimum distance between
+// camera(subject) and walls when movement is approaching the wall.
+// Unit: world grid blocks (e.g. 0.25 == 16px when texSize is 64).
+func (c *Camera) SetMinDistanceToWallWhileApproaching(distance float64) {
+	if distance < 0 {
+		distance = 0
+	}
+	c.collisionDistance = distance
+}
+
+func (c *Camera) GetMinDistanceToWallWhileApproaching() float64 {
+	return c.collisionDistance
+}
+
 func (c *Camera) SetShooterHeight(height float64) {
 	c.shooterHeight = height
 }
