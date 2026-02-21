@@ -563,17 +563,17 @@ func (r *Renderer) syncLastSpriteParameters() {
 }
 
 func (r *Renderer) Draw(screen *ebiten.Image) {
+	if r.worldBuffer == nil || r.worldBuffer.Bounds().Dx() != int(r.screenWidth) || r.worldBuffer.Bounds().Dy() != int(r.screenHeight) {
+		r.worldBuffer = ebiten.NewImage(int(r.screenWidth), int(r.screenHeight))
+	}
+	r.worldBuffer.Clear()
+	r.renderWall(r.worldBuffer)
+	r.GetAimPositionFromScreen(r.worldBuffer)
+
 	if r.pseudoShadowConfig.Enabled && r.pseudoShadowShader != nil {
-		if r.worldBuffer == nil || r.worldBuffer.Bounds().Dx() != int(r.screenWidth) || r.worldBuffer.Bounds().Dy() != int(r.screenHeight) {
-			r.worldBuffer = ebiten.NewImage(int(r.screenWidth), int(r.screenHeight))
-		}
-		r.worldBuffer.Clear()
-		r.renderWall(r.worldBuffer)
-		r.GetAimPositionFromScreen(r.worldBuffer)
 		r.renderPseudoShadow(screen, r.worldBuffer)
 	} else {
-		r.renderWall(screen)
-		r.GetAimPositionFromScreen(screen)
+		screen.DrawImage(r.worldBuffer, nil)
 	}
 
 	// r.renderWithNoTextures(screen)
