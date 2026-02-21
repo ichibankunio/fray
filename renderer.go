@@ -76,12 +76,13 @@ type Renderer struct {
 	lastSpriteParameters   []float32
 	spriteParametersBuffer []float32
 
-	CeilingHeight       float32
-	CeilingTextureID    float32
-	DefaultFloorColor   [3]float32
-	POVScale            float32
-	AimHighlightEnabled bool
-	ControlInputEnabled bool
+	CeilingHeight         float32
+	CeilingTextureID      float32
+	DefaultFloorTextureID float32
+	DefaultFloorColor     [3]float32
+	POVScale              float32
+	AimHighlightEnabled   bool
+	ControlInputEnabled   bool
 }
 
 type AimDirection int
@@ -141,6 +142,7 @@ func (r *Renderer) Init(screenWidth, screenHeight float64, canvasWidth, canvasHe
 	r.HandTextureID = 0
 	r.CeilingHeight = 0
 	r.CeilingTextureID = -1
+	r.DefaultFloorTextureID = -1
 	r.DefaultFloorColor = [3]float32{240.0 / 255.0, 240.0 / 255.0, 240.0 / 255.0}
 	r.POVScale = 1
 	r.AimHighlightEnabled = true
@@ -175,7 +177,15 @@ func (r *Renderer) SetCeilingHeight(h float32) {
 }
 
 func (r *Renderer) SetCeilingTextureID(id int) {
+	r.SetDefaultCeilingTextureID(id)
+}
+
+func (r *Renderer) SetDefaultCeilingTextureID(id int) {
 	r.CeilingTextureID = float32(id)
+}
+
+func (r *Renderer) SetDefaultFloorTextureID(id int) {
+	r.DefaultFloorTextureID = float32(id)
 }
 
 func (r *Renderer) SetDefaultFloorColor(clr color.Color) {
@@ -601,14 +611,15 @@ func (r *Renderer) renderWall(screen *ebiten.Image) {
 		"SpriteNum":          len(r.Wld.Sprites),
 		"SpriteParameterNum": r.SpriteParameterNum,
 
-		"AimPos":              []float32{float32(r.aimPos.X), float32(r.aimPos.Y), float32(r.aimPos.Z)},
-		"HandTextureID":       float32(r.HandTextureID),
-		"TexSize":             float32(r.texSize),
-		"WorldSize":           []float32{float32(r.Wld.canvasWidth), float32(r.Wld.canvasHeight)},
-		"CeilingHeight":       r.CeilingHeight,
-		"CeilingTextureID":    r.CeilingTextureID,
-		"DefaultFloorColor":   []float32{r.DefaultFloorColor[0], r.DefaultFloorColor[1], r.DefaultFloorColor[2]},
-		"AimHighlightEnabled": float32(0),
+		"AimPos":                []float32{float32(r.aimPos.X), float32(r.aimPos.Y), float32(r.aimPos.Z)},
+		"HandTextureID":         float32(r.HandTextureID),
+		"TexSize":               float32(r.texSize),
+		"WorldSize":             []float32{float32(r.Wld.canvasWidth), float32(r.Wld.canvasHeight)},
+		"CeilingHeight":         r.CeilingHeight,
+		"CeilingTextureID":      r.CeilingTextureID,
+		"DefaultFloorTextureID": r.DefaultFloorTextureID,
+		"DefaultFloorColor":     []float32{r.DefaultFloorColor[0], r.DefaultFloorColor[1], r.DefaultFloorColor[2]},
+		"AimHighlightEnabled":   float32(0),
 	}
 	if r.AimHighlightEnabled {
 		op.Uniforms["AimHighlightEnabled"] = float32(1)
