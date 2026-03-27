@@ -36,7 +36,12 @@ type Camera struct {
 	//--the 2d raycaster version of camera plane, adjust y component to change FOV (ratio between this and dir x resizes FOV)--//
 	plane vec2.Vec2
 
-	collisionDistance float64
+	collisionDistance  float64
+	collisionAnchorPos vec3.Vec3
+	useCollisionAnchor bool
+	collisionHalfWidth float64
+	collisionHalfDepth float64
+	collisionHeight    float64
 
 	shooterHeight float64
 	shooterRadius float64
@@ -48,8 +53,17 @@ type Camera struct {
 }
 
 func (c *Camera) SetPos(pos vec3.Vec3) {
+	c.SetSubjectPos(pos)
+}
+
+func (c *Camera) SetCameraPos(pos vec3.Vec3) {
 	c.pos = pos
-	c.subjectPos = pos.Add(vec3.New(c.dir.X, c.dir.Y, 0).Scale(c.distanceBetweenSubjectCamera))
+	c.syncSubjectPosFromCamera()
+}
+
+func (c *Camera) SetSubjectPos(pos vec3.Vec3) {
+	c.subjectPos = pos
+	c.syncCameraPosFromSubject()
 }
 
 // func (c *Camera) SetPos(pos vec2.Vec2) {
@@ -62,6 +76,43 @@ func (c *Camera) GetPos() vec3.Vec3 {
 
 func (c *Camera) GetSubjectPos() vec3.Vec3 {
 	return c.subjectPos
+}
+
+func (c *Camera) SetCollisionAnchorPos(pos vec3.Vec3) {
+	c.collisionAnchorPos = pos
+	c.useCollisionAnchor = true
+}
+
+func (c *Camera) ClearCollisionAnchorPos() {
+	c.useCollisionAnchor = false
+}
+
+func (c *Camera) GetCollisionAnchorPos() vec3.Vec3 {
+	if c.useCollisionAnchor {
+		return c.collisionAnchorPos
+	}
+	return c.subjectPos
+}
+
+// SetCollisionBoxSize configures the collision body dimensions in world grid
+// blocks. For example, (1, 1, 1) means a 1x1x1 block solid body.
+func (c *Camera) SetCollisionBoxSize(width, depth, height float64) {
+	if width < 0 {
+		width = 0
+	}
+	if depth < 0 {
+		depth = 0
+	}
+	if height < 0 {
+		height = 0
+	}
+	c.collisionHalfWidth = width / 2
+	c.collisionHalfDepth = depth / 2
+	c.collisionHeight = height
+}
+
+func (c *Camera) GetCollisionBoxSize() (width, depth, height float64) {
+	return c.collisionHalfWidth * 2, c.collisionHalfDepth * 2, c.collisionHeight
 }
 
 func (c *Camera) GetPlane() vec2.Vec2 {
@@ -81,14 +132,26 @@ func (c *Camera) SetPitch(pitch float32) {
 }
 
 func (c *Camera) SetPose(pos vec3.Vec3, dir vec2.Vec2, plane vec2.Vec2, pitch float32) {
+	c.SetSubjectPose(pos, dir, plane, pitch)
+}
+
+func (c *Camera) SetSubjectPose(pos vec3.Vec3, dir vec2.Vec2, plane vec2.Vec2, pitch float32) {
 	c.dir = dir
 	c.plane = plane
 	c.pitch = pitch
-	c.SetPos(pos)
+	c.SetSubjectPos(pos)
+}
+
+func (c *Camera) SetCameraPose(pos vec3.Vec3, dir vec2.Vec2, plane vec2.Vec2, pitch float32) {
+	c.dir = dir
+	c.plane = plane
+	c.pitch = pitch
+	c.SetCameraPos(pos)
 }
 
 func (c *Camera) SetDafaultDistanceBetweenSubjectCamera(distance float64) {
 	c.distanceBetweenSubjectCamera = distance
+	c.syncCameraPosFromSubject()
 }
 
 // SetMinDistanceToWallWhileApproaching configures the minimum distance between
@@ -114,7 +177,7 @@ func (c *Camera) GetShooterHeight() float64 {
 }
 
 func (c *Camera) Init(screenWidth, screenHeight float64) {
-	c.pos = vec3.New(64*10*3/4, 64*10/2, 32)
+	initialCameraPos := vec3.New(64*10*3/4, 64*10/2, 32)
 	// c.pos = vec3.New(500, 650, 32)
 	c.dir = vec2.New(-1, 0)
 	// c.plane = vec2.New(0, screenWidth/screenHeight)
@@ -125,9 +188,14 @@ func (c *Camera) Init(screenWidth, screenHeight float64) {
 
 	c.distanceBetweenSubjectCamera = 64
 
-	// c.subjectPos = c.pos.Add(vec3.New(c.dir.X, c.dir.Y, 0).Scale(c.distanceBetweenSubjectCamera))
+	c.SetCameraPos(initialCameraPos)
 
 	c.collisionDistance = 0.25
+	c.collisionAnchorPos = c.subjectPos
+	c.useCollisionAnchor = false
+	c.collisionHalfWidth = c.shooterRadius
+	c.collisionHalfDepth = c.shooterRadius
+	c.collisionHeight = 0
 
 	c.zoomed = false
 
@@ -138,6 +206,8 @@ func (c *Camera) Init(screenWidth, screenHeight float64) {
 
 	c.shooterHeight = 128
 	c.shooterRadius = 0.25 //equivalent to 16px
+	c.collisionHalfWidth = c.shooterRadius
+	c.collisionHalfDepth = c.shooterRadius
 
 	if runtime.GOOS != "js" {
 		ebiten.SetCursorMode(ebiten.CursorModeCaptured)
@@ -158,6 +228,7 @@ func (c *Camera) RotateHorizontal(v float64) {
 	c.dir = vec2.New(math.Cos(v)*c.dir.X-math.Sin(v)*c.dir.Y, math.Sin(v)*c.dir.X+math.Cos(v)*c.dir.Y)
 
 	c.plane = vec2.New(math.Cos(v)*c.plane.X-math.Sin(v)*c.plane.Y, math.Sin(v)*c.plane.X+math.Cos(v)*c.plane.Y)
+	c.syncSubjectPosFromCamera()
 
 	// //left
 	// c.dir = vec2.New(math.Cos(-rotateV)*c.dir.X-math.Sin(-rotateV)*c.dir.Y, math.Sin(-rotateV)*c.dir.X+math.Cos(-rotateV)*c.dir.Y)
@@ -179,6 +250,17 @@ func (c *Camera) RotateHorizontalAroundSubject(v float64) {
 
 	c.plane = vec2.New(math.Cos(v)*c.plane.X-math.Sin(v)*c.plane.Y, math.Sin(v)*c.plane.X+math.Cos(v)*c.plane.Y)
 
-	c.pos = vec3.New(math.Cos(v)*(c.pos.X-c.subjectPos.X)-math.Sin(v)*(c.pos.Y-c.subjectPos.Y)+c.subjectPos.X, math.Sin(v)*(c.pos.X-c.subjectPos.X)+math.Cos(v)*(c.pos.Y-c.subjectPos.Y)+c.subjectPos.Y, c.pos.Z)
+	c.syncCameraPosFromSubject()
+}
 
+func (c *Camera) syncSubjectPosFromCamera() {
+	c.subjectPos = c.pos.Add(c.subjectOffset())
+}
+
+func (c *Camera) syncCameraPosFromSubject() {
+	c.pos = c.subjectPos.Sub(c.subjectOffset())
+}
+
+func (c *Camera) subjectOffset() vec3.Vec3 {
+	return vec3.New(c.dir.X, c.dir.Y, 0).Scale(c.distanceBetweenSubjectCamera)
 }

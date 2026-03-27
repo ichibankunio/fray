@@ -76,14 +76,15 @@ type Renderer struct {
 	lastSpriteParameters   []float32
 	spriteParametersBuffer []float32
 
-	CeilingHeight         float32
-	CeilingTextureID      float32
-	DefaultFloorTextureID float32
-	DefaultFloorColor     [3]float32
-	POVScale              float32
-	AimHighlightEnabled   bool
-	ControlInputEnabled   bool
-	JumpButtonVisible     bool
+	CeilingHeight             float32
+	CeilingTextureID          float32
+	DefaultFloorTextureID     float32
+	DefaultFloorColor         [3]float32
+	POVScale                  float32
+	AimHighlightEnabled       bool
+	ControlInputEnabled       bool
+	JumpButtonVisible         bool
+	CameraInterferenceEnabled bool
 }
 
 type AimDirection int
@@ -149,6 +150,7 @@ func (r *Renderer) Init(screenWidth, screenHeight float64, canvasWidth, canvasHe
 	r.AimHighlightEnabled = true
 	r.ControlInputEnabled = true
 	r.JumpButtonVisible = true
+	r.CameraInterferenceEnabled = true
 	r.pseudoShadowConfig = defaultPseudoShadowConfig(float32(r.screenHeight))
 	if r.pseudoShadowShader == nil {
 		r.pseudoShadowConfig.Enabled = false
@@ -164,6 +166,14 @@ func defaultPseudoShadowConfig(screenHeight float32) PseudoShadowConfig {
 		VignetteStrength: 0.65,
 		TintStrength:     0.12,
 	}
+}
+
+func (r *Renderer) SetCameraInterferenceEnabled(enabled bool) {
+	r.CameraInterferenceEnabled = enabled
+}
+
+func (r *Renderer) SetCollisionBoxSize(width, depth, height float64) {
+	r.Cam.SetCollisionBoxSize(width, depth, height)
 }
 
 func (r *Renderer) SetHandTextureID(id int) {
@@ -527,12 +537,14 @@ func (r *Renderer) Update() {
 		} else {
 			r.UpdateCamRotationAroundSubjectByTouch(true)
 		}
-		r.UpdateCamPos(r.Cam.subjectPos)
+		r.UpdateCamPos(r.Cam.GetCollisionAnchorPos())
 	}
 	r.UpdateCamPosZ()
 	// r.UpdateCameraPos()
 
-	r.GetDistanceInterferenceFromSubject()
+	if r.CameraInterferenceEnabled {
+		r.GetDistanceInterferenceFromSubject()
+	}
 
 	r.updateSpriteParameters()
 	r.sortSpriteParameters()
@@ -690,12 +702,12 @@ func (r *Renderer) UpdateCamPos(playerPos vec3.Vec3) {
 
 	// blockLastFrame := r.Cam.subjectPos.Scale(1/float64(r.texSize)).Floor()
 
-	r.Cam.pos = r.Cam.pos.Add(r.Cam.v)
 	r.Cam.subjectPos = r.Cam.subjectPos.Add(r.Cam.v)
 }
 
 func (r *Renderer) IsRunningOnGround() bool {
-	return r.Cam.v.SquaredLength() > 0 && r.Cam.subjectPos.Z-(r.GetGroundHeight(r.Cam.subjectPos)+r.Cam.shooterHeight) == 0
+	groundHeight := r.GetGroundHeightUnderCollisionBox(vec2.New(r.Cam.subjectPos.X, r.Cam.subjectPos.Y))
+	return r.Cam.v.SquaredLength() > 0 && r.Cam.subjectPos.Z-(groundHeight+r.Cam.shooterHeight) == 0
 }
 
 func (r *Renderer) UpdateCamPosZ() {
@@ -711,12 +723,13 @@ func (r *Renderer) UpdateCamPosZ() {
 
 	delta := r.collisionCheckedDeltaZ(r.Cam.subjectPos, r.Cam.vZ)
 	r.Cam.subjectPos.Z += delta
+	groundHeight := r.GetGroundHeightUnderCollisionBox(vec2.New(r.Cam.subjectPos.X, r.Cam.subjectPos.Y))
 	if delta == 0 {
 		r.Cam.vZ = 0
-		r.Cam.subjectPos.Z = (r.GetGroundHeight(r.Cam.subjectPos) + r.Cam.shooterHeight)
+		r.Cam.subjectPos.Z = groundHeight + r.Cam.shooterHeight
 	}
 
-	if r.Cam.subjectPos.Z-(r.GetGroundHeight(r.Cam.subjectPos)+r.Cam.shooterHeight) == 0 {
+	if r.Cam.subjectPos.Z-(groundHeight+r.Cam.shooterHeight) == 0 {
 		r.jumpCounter = 0
 	}
 

@@ -7,6 +7,8 @@ import (
 	"github.com/ichibankunio/fvec/vec3"
 )
 
+const collisionFootprintEpsilon = 1e-9
+
 type Ray struct {
 	perpWallDist       float64
 	squaredEuclidean   float64
@@ -135,47 +137,16 @@ func (r *Renderer) shouldBlockApproachToWall(ray *Ray, towardWallDelta float64, 
 
 func (r *Renderer) collisionCheckedDelta(pos vec3.Vec3, delta vec2.Vec2, collisionBuffer float64) vec3.Vec3 { //deltaは絶対値が大きすぎるとうまくいかない（？）
 	climbable := 0.0
-	// distanceToSubject := 0.0
-
-	if delta.X > 0 {
-		// ray := r.castRayMultiHeight(vec2.New(1, 0), r.Cam.plane, pos.Add(vec3.New(r.Cam.dir.X, r.Cam.dir.Y, 0).Scale(distanceToSubject)))
-		ray := r.castRayMultiHeight(vec2.New(1, 0), r.Cam.plane, pos.Add(vec3.New(0, 0, -r.Cam.shooterHeight)), RAY_HIT_UP)
-		if r.shouldBlockApproachToWall(ray, delta.X, collisionBuffer, pos, climbable) {
-			// delta.X = dist - collisionBuffer
+	if delta.X != 0 {
+		nextPos := pos.Add(vec3.New(delta.X, 0, 0))
+		if r.isCollisionBoxBlocked(nextPos, collisionBuffer, climbable) {
 			delta.X = 0
 		}
 	}
 
-	if delta.X < 0 {
-		// ray := r.castRayMultiHeight(vec2.New(-1, 0), r.Cam.plane, pos.Add(vec3.New(r.Cam.dir.X, r.Cam.dir.Y, 0).Scale(distanceToSubject)))
-		ray := r.castRayMultiHeight(vec2.New(-1, 0), r.Cam.plane, pos.Add(vec3.New(0, 0, -r.Cam.shooterHeight)), RAY_HIT_UP)
-
-		if r.shouldBlockApproachToWall(ray, -delta.X, collisionBuffer, pos, climbable) {
-
-			// delta.X = collisionBuffer - dist
-			delta.X = 0
-
-		}
-	}
-
-	if delta.Y > 0 {
-		// ray := r.castRayMultiHeight(vec2.New(0, 1), r.Cam.plane, pos.Add(vec3.New(r.Cam.dir.X, r.Cam.dir.Y, 0).Scale(distanceToSubject)))
-		ray := r.castRayMultiHeight(vec2.New(0, 1), r.Cam.plane, pos.Add(vec3.New(0, 0, -r.Cam.shooterHeight)), RAY_HIT_UP)
-
-		if r.shouldBlockApproachToWall(ray, delta.Y, collisionBuffer, pos, climbable) {
-
-			// delta.Y = dist - collisionBuffer
-			delta.Y = 0
-		}
-	}
-
-	if delta.Y < 0 {
-
-		ray := r.castRayMultiHeight(vec2.New(0, -1), r.Cam.plane, pos.Add(vec3.New(0, 0, -r.Cam.shooterHeight)), RAY_HIT_UP)
-
-		if r.shouldBlockApproachToWall(ray, -delta.Y, collisionBuffer, pos, climbable) {
-
-			// delta.Y = collisionBuffer - dist
+	if delta.Y != 0 {
+		nextPos := pos.Add(vec3.New(delta.X, delta.Y, 0))
+		if r.isCollisionBoxBlocked(nextPos, collisionBuffer, climbable) {
 			delta.Y = 0
 		}
 	}
@@ -185,7 +156,7 @@ func (r *Renderer) collisionCheckedDelta(pos vec3.Vec3, delta vec2.Vec2, collisi
 
 func (r *Renderer) collisionCheckedDeltaZ(pos vec3.Vec3, delta float64) float64 {
 	if delta < 0 {
-		dist := pos.Z - r.GetGroundHeight(pos) //今のz座標と地面の高さの差
+		dist := pos.Z - r.GetGroundHeightUnderCollisionBox(vec2.New(pos.X, pos.Y)) //今のz座標と地面の高さの差
 		if dist <= r.Cam.shooterHeight {
 			delta = 0
 		}
@@ -203,4 +174,95 @@ func (r *Renderer) GetGroundHeight(pos vec3.Vec3) float64 {
 	}
 
 	return float64(r.Wld.HeightMap[int(pos.Y/float64(r.texSize))*r.canvasWidth+int(pos.X/float64(r.texSize))]) * float64(r.texSize)
+}
+
+func (r *Renderer) GetGroundHeightUnderCollisionBox(center vec2.Vec2) float64 {
+	halfWidth, halfDepth := r.collisionBoxHalfExtents()
+	return r.maxGroundHeightInFootprint(center, halfWidth, halfDepth)
+}
+
+func (r *Renderer) CanOccupyCollisionAnchor(pos vec3.Vec3, collisionBuffer float64) bool {
+	return !r.isCollisionBoxBlocked(pos, collisionBuffer, 0)
+}
+
+func (r *Renderer) collisionBoxHalfExtents() (halfWidth, halfDepth float64) {
+	return r.Cam.collisionHalfWidth, r.Cam.collisionHalfDepth
+}
+
+func (r *Renderer) collisionBoxHeightBlocks() float64 {
+	if r.Cam.collisionHeight > 0 {
+		return r.Cam.collisionHeight
+	}
+	if r.texSize <= 0 {
+		return 0
+	}
+	return r.Cam.shooterHeight / float64(r.texSize)
+}
+
+func (r *Renderer) collisionBoxHeightWorld() float64 {
+	return r.collisionBoxHeightBlocks() * float64(r.texSize)
+}
+
+func (r *Renderer) maxGroundHeightInFootprint(center vec2.Vec2, halfWidth, halfDepth float64) float64 {
+	minX, maxX, minY, maxY, ok := r.footprintTileRange(center, halfWidth, halfDepth)
+	if !ok {
+		return 0
+	}
+
+	maxHeight := 0.0
+	for y := minY; y <= maxY; y++ {
+		for x := minX; x <= maxX; x++ {
+			if !r.isInsideWorldTile(x, y) {
+				continue
+			}
+			height := float64(r.Wld.HeightMap[y*r.canvasWidth+x]) * float64(r.texSize)
+			if height > maxHeight {
+				maxHeight = height
+			}
+		}
+	}
+
+	return maxHeight
+}
+
+func (r *Renderer) isCollisionBoxBlocked(pos vec3.Vec3, collisionBuffer float64, climbable float64) bool {
+	halfWidth, halfDepth := r.collisionBoxHalfExtents()
+	minX, maxX, minY, maxY, ok := r.footprintTileRange(vec2.New(pos.X, pos.Y), halfWidth+collisionBuffer, halfDepth+collisionBuffer)
+	if !ok {
+		return true
+	}
+
+	feetHeight := (pos.Z / float64(r.texSize)) - r.collisionBoxHeightBlocks()
+	blockLimit := feetHeight + climbable
+	for y := minY; y <= maxY; y++ {
+		for x := minX; x <= maxX; x++ {
+			if !r.isInsideWorldTile(x, y) {
+				return true
+			}
+			height := float64(r.Wld.HeightMap[y*r.canvasWidth+x])
+			if height > blockLimit {
+				return true
+			}
+		}
+	}
+
+	return false
+}
+
+func (r *Renderer) footprintTileRange(center vec2.Vec2, halfWidth, halfDepth float64) (minX, maxX, minY, maxY int, ok bool) {
+	if r.texSize <= 0 {
+		return 0, -1, 0, -1, false
+	}
+
+	centerX := center.X / float64(r.texSize)
+	centerY := center.Y / float64(r.texSize)
+	minX = int(math.Floor(centerX - halfWidth + collisionFootprintEpsilon))
+	maxX = int(math.Floor(centerX + halfWidth - collisionFootprintEpsilon))
+	minY = int(math.Floor(centerY - halfDepth + collisionFootprintEpsilon))
+	maxY = int(math.Floor(centerY + halfDepth - collisionFootprintEpsilon))
+	return minX, maxX, minY, maxY, minX <= maxX && minY <= maxY
+}
+
+func (r *Renderer) isInsideWorldTile(x, y int) bool {
+	return x >= 0 && y >= 0 && x < r.canvasWidth && y < r.canvasHeight
 }
