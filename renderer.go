@@ -86,6 +86,7 @@ type Renderer struct {
 	JumpButtonVisible         bool
 	CameraInterferenceEnabled bool
 	VerticalMovementEnabled   bool
+	OccludingWallFadeEnabled  bool
 }
 
 type AimDirection int
@@ -153,6 +154,7 @@ func (r *Renderer) Init(screenWidth, screenHeight float64, canvasWidth, canvasHe
 	r.JumpButtonVisible = true
 	r.CameraInterferenceEnabled = true
 	r.VerticalMovementEnabled = true
+	r.OccludingWallFadeEnabled = false
 	r.pseudoShadowConfig = defaultPseudoShadowConfig(float32(r.screenHeight))
 	if r.pseudoShadowShader == nil {
 		r.pseudoShadowConfig.Enabled = false
@@ -172,6 +174,10 @@ func defaultPseudoShadowConfig(screenHeight float32) PseudoShadowConfig {
 
 func (r *Renderer) SetCameraInterferenceEnabled(enabled bool) {
 	r.CameraInterferenceEnabled = enabled
+}
+
+func (r *Renderer) SetOccludingWallFadeEnabled(enabled bool) {
+	r.OccludingWallFadeEnabled = enabled
 }
 
 func (r *Renderer) SetVerticalMovementEnabled(enabled bool) {
@@ -633,6 +639,7 @@ func (r *Renderer) DrawTopView(screen *ebiten.Image) {
 }
 
 func (r *Renderer) renderWall(screen *ebiten.Image) {
+	occlusionTargetPos := r.Cam.GetCollisionAnchorPos()
 	op := &ebiten.DrawRectShaderOptions{}
 	op.Uniforms = map[string]interface{}{
 		"ScreenSize": []float32{float32(r.screenWidth), float32(r.screenHeight)},
@@ -650,6 +657,8 @@ func (r *Renderer) renderWall(screen *ebiten.Image) {
 		"HandTextureID":         float32(r.HandTextureID),
 		"TexSize":               float32(r.texSize),
 		"WorldSize":             []float32{float32(r.Wld.canvasWidth), float32(r.Wld.canvasHeight)},
+		"OcclusionTargetPos":    []float32{float32(occlusionTargetPos.X / float64(r.texSize)), float32(occlusionTargetPos.Y / float64(r.texSize)), float32(occlusionTargetPos.Z / float64(r.texSize))},
+		"OccludingWallFade":     float32(0),
 		"CeilingHeight":         r.CeilingHeight,
 		"CeilingTextureID":      r.CeilingTextureID,
 		"DefaultFloorTextureID": r.DefaultFloorTextureID,
@@ -658,6 +667,9 @@ func (r *Renderer) renderWall(screen *ebiten.Image) {
 	}
 	if r.AimHighlightEnabled {
 		op.Uniforms["AimHighlightEnabled"] = float32(1)
+	}
+	if r.OccludingWallFadeEnabled {
+		op.Uniforms["OccludingWallFade"] = float32(1)
 	}
 
 	op.Images[0] = r.Textures[0].Src //wall(texture), sprite(texture)

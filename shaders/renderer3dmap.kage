@@ -17,6 +17,8 @@ var SpriteParameterNum int
 var TexSize float//single wall/floor/sprite size in px
 var ScreenSize vec2
 var WorldSize vec2
+var OcclusionTargetPos vec3
+var OccludingWallFade float
 var CeilingHeight float//ceiling height in blocks (<= 0 disables ceiling)
 var CeilingTextureID float//ceiling texture index in imageSrc1 atlas
 var DefaultFloorTextureID float//default floor texture index in imageSrc1 atlas (<0 disables)
@@ -45,6 +47,8 @@ func Fragment(dstPos vec4, srcPos vec2, color vec4) vec4 {
     texOrigin := imageSrc0Origin()
     tilesPerRow := max(1.0, floor(ScreenSize.x / TexSize))
     cameraX := (2.0 * (1.0 - dstPos.x / ScreenSize.x) - 1.0) * POVScale //x-coordinate in camera space
+    cameraPos3D := vec3(Pos.x, Pos.y, PosZ)
+    occlusionTargetSquaredDistance := dot(OcclusionTargetPos - cameraPos3D, OcclusionTargetPos - cameraPos3D)
 
     rayDir := Dir + Plane * cameraX
 
@@ -64,6 +68,7 @@ func Fragment(dstPos vec4, srcPos vec2, color vec4) vec4 {
     lineHeight := 0.0
     wallHeightAtRayPosition := imageSrc1UnsafeAt(texOrigin + mapPos).a * 255//ray's initial height = ground height at camera's position
     spriteBlending := vec4(0)
+    occludedSpriteBlending := vec4(0)
 
     //DDA algorism
     for i := 0; i < 100; i++ {
@@ -113,17 +118,21 @@ func Fragment(dstPos vec4, srcPos vec2, color vec4) vec4 {
 
                     CurrentAnimation := DecodeFloatRGBA(imageSrc0UnsafeAt(texOrigin + spriteOrigin+vec2(8, 0))) * 255
 
-                    if distanceToCamera >= 0 && distanceToCamera < squaredEuclidean && dstPos.x > posOnScreen.x && dstPos.x < posOnScreen.x + sizeOnScreen.x && dstPos.y > posOnScreen.y && dstPos.y < posOnScreen.y + sizeOnScreen.y {
+                    if distanceToCamera >= 0 && dstPos.x > posOnScreen.x && dstPos.x < posOnScreen.x + sizeOnScreen.x && dstPos.y > posOnScreen.y && dstPos.y < posOnScreen.y + sizeOnScreen.y {
 
                         posOnTexture := vec2((dstPos.x - posOnScreen.x) / sizeOnScreen.x + mod(TexIDBegin + CurrentAnimation, tilesPerRow), (dstPos.y - posOnScreen.y) / sizeOnScreen.y + floor((TexIDBegin + CurrentAnimation) / tilesPerRow)) * TexSize
 
                         clr := imageSrc0UnsafeAt(texOrigin + posOnTexture)
 
                         if clr.a > 0 {
-                            if sizeOnScreen.x > ScreenSize.x*1.5 {//(WIP)
-                                spriteBlending = vec4(clr.rgb, ScreenSize.x*1.5 / sizeOnScreen.x)
-                            }else {
-                                return vec4(clr)
+                            if distanceToCamera < squaredEuclidean {
+                                if sizeOnScreen.x > ScreenSize.x*1.5 {//(WIP)
+                                    spriteBlending = vec4(clr.rgb, ScreenSize.x*1.5 / sizeOnScreen.x)
+                                }else {
+                                    return vec4(clr)
+                                }
+                            } else if OccludingWallFade > 0.5 && squaredEuclidean < occlusionTargetSquaredDistance && abs(distanceToCamera - occlusionTargetSquaredDistance) < 20.0 {
+                                occludedSpriteBlending = vec4(clr.rgb, max(occludedSpriteBlending.a, clr.a))
                             }
                         }
                     }
@@ -212,6 +221,9 @@ func Fragment(dstPos vec4, srcPos vec2, color vec4) vec4 {
                 clr := imageSrc1UnsafeAt(texOrigin + posOnTexture)
 
                 clr = (side * vec4(clr.rgb-vec3(0.1), 1) + (1.0 - side) * vec4(clr.rgb, 1.0)) //影を簡易的につける
+                if OccludingWallFade > 0.5 && occludedSpriteBlending.a > 0 {
+                    clr.rgb = clr.rgb + (occludedSpriteBlending.rgb - clr.rgb) * 0.7
+                }
  
 
                 return vec4(clr.rgb + (spriteBlending.rgb - clr.rgb) * spriteBlending.a, 1)
