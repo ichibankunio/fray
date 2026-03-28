@@ -85,6 +85,7 @@ type Renderer struct {
 	ControlInputEnabled       bool
 	JumpButtonVisible         bool
 	CameraInterferenceEnabled bool
+	VerticalMovementEnabled   bool
 }
 
 type AimDirection int
@@ -151,6 +152,7 @@ func (r *Renderer) Init(screenWidth, screenHeight float64, canvasWidth, canvasHe
 	r.ControlInputEnabled = true
 	r.JumpButtonVisible = true
 	r.CameraInterferenceEnabled = true
+	r.VerticalMovementEnabled = true
 	r.pseudoShadowConfig = defaultPseudoShadowConfig(float32(r.screenHeight))
 	if r.pseudoShadowShader == nil {
 		r.pseudoShadowConfig.Enabled = false
@@ -170,6 +172,15 @@ func defaultPseudoShadowConfig(screenHeight float32) PseudoShadowConfig {
 
 func (r *Renderer) SetCameraInterferenceEnabled(enabled bool) {
 	r.CameraInterferenceEnabled = enabled
+}
+
+func (r *Renderer) SetVerticalMovementEnabled(enabled bool) {
+	r.VerticalMovementEnabled = enabled
+	if enabled {
+		return
+	}
+	r.Cam.vZ = 0
+	r.jumpCounter = 0
 }
 
 func (r *Renderer) SetCollisionBoxSize(width, depth, height float64) {
@@ -539,7 +550,9 @@ func (r *Renderer) Update() {
 		}
 		r.UpdateCamPos(r.Cam.GetCollisionAnchorPos())
 	}
-	r.UpdateCamPosZ()
+	if r.VerticalMovementEnabled {
+		r.UpdateCamPosZ()
+	}
 	// r.UpdateCameraPos()
 
 	if r.CameraInterferenceEnabled {
