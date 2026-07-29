@@ -205,10 +205,9 @@ func (me *MapEditor) PrintTerrainMap(base, rise []float32, shapes []uint8, dst *
 	n = min(n, len(shapes))
 	n = min(n, me.canvasWidth*me.canvasHeight)
 	for i := 0; i < n; i++ {
-		baseValue := max(float32(0), min(float32(255), base[i]*4))
 		encodedRise := max(float32(0), min(float32(255), rise[i]*32+128))
 		dstIdx := ((i/me.canvasWidth)*me.screenWidth + (i % me.canvasWidth)) * 4
-		buffer[dstIdx] = uint8(baseValue + 0.5)
+		buffer[dstIdx] = encodeTerrainBase(base[i])
 		buffer[dstIdx+1] = uint8(encodedRise + 0.5)
 		buffer[dstIdx+2] = shapes[i]
 		buffer[dstIdx+3] = 255
@@ -219,6 +218,11 @@ func (me *MapEditor) PrintTerrainMap(base, rise []float32, shapes []uint8, dst *
 		target = dst.SubImage(image.Rect(0, 0, me.screenWidth, me.screenHeight)).(*ebiten.Image)
 	}
 	target.WritePixels(buffer)
+}
+
+func encodeTerrainBase(base float32) uint8 {
+	value := max(float32(0), min(float32(255), base*4))
+	return uint8(value + 0.5)
 }
 
 func (me *MapEditor) WriteWorldMapImage(worldMap [][]uint8, heightMap []uint8) *ebiten.Image {
