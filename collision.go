@@ -136,7 +136,9 @@ func (r *Renderer) shouldBlockApproachToWall(ray *Ray, towardWallDelta float64, 
 }
 
 func (r *Renderer) collisionCheckedDelta(pos vec3.Vec3, delta vec2.Vec2, collisionBuffer float64) vec3.Vec3 { //deltaは絶対値が大きすぎるとうまくいかない（？）
-	climbable := 0.0
+	// A one-block rise across one tile remains walkable even when the collision
+	// footprint probes ahead of the player's center.
+	climbable := 0.60
 	if delta.X != 0 {
 		nextPos := pos.Add(vec3.New(delta.X, 0, 0))
 		if r.isCollisionBoxBlocked(nextPos, collisionBuffer, climbable) {
@@ -166,14 +168,9 @@ func (r *Renderer) collisionCheckedDeltaZ(pos vec3.Vec3, delta float64) float64 
 }
 
 func (r *Renderer) GetGroundHeight(pos vec3.Vec3) float64 {
-	if pos.Y/float64(r.texSize) < 0 {
-		pos.Y = 0
-	}
-	if pos.X/float64(r.texSize) < 0 {
-		pos.X = 0
-	}
-
-	return float64(r.Wld.HeightMap[int(pos.Y/float64(r.texSize))*r.canvasWidth+int(pos.X/float64(r.texSize))]) * float64(r.texSize)
+	x := pos.X / float64(r.texSize)
+	y := pos.Y / float64(r.texSize)
+	return r.heightAtBlocks(x, y) * float64(r.texSize)
 }
 
 func (r *Renderer) GetGroundHeightUnderCollisionBox(center vec2.Vec2) float64 {
@@ -204,18 +201,18 @@ func (r *Renderer) collisionBoxHeightWorld() float64 {
 }
 
 func (r *Renderer) maxGroundHeightInFootprint(center vec2.Vec2, halfWidth, halfDepth float64) float64 {
-	minX, maxX, minY, maxY, ok := r.footprintTileRange(center, halfWidth, halfDepth)
-	if !ok {
+	if r.texSize <= 0 {
 		return 0
 	}
 
+	minX := center.X/float64(r.texSize) - halfWidth
+	maxX := center.X/float64(r.texSize) + halfWidth
+	minY := center.Y/float64(r.texSize) - halfDepth
+	maxY := center.Y/float64(r.texSize) + halfDepth
 	maxHeight := 0.0
-	for y := minY; y <= maxY; y++ {
-		for x := minX; x <= maxX; x++ {
-			if !r.isInsideWorldTile(x, y) {
-				continue
-			}
-			height := float64(r.Wld.HeightMap[y*r.canvasWidth+x]) * float64(r.texSize)
+	for y := minY; y <= maxY; y = nextTerrainSample(y, maxY) {
+		for x := minX; x <= maxX; x = nextTerrainSample(x, maxX) {
+			height := r.heightAtBlocks(x, y) * float64(r.texSize)
 			if height > maxHeight {
 				maxHeight = height
 			}
@@ -225,28 +222,39 @@ func (r *Renderer) maxGroundHeightInFootprint(center vec2.Vec2, halfWidth, halfD
 	return maxHeight
 }
 
+func nextTerrainSample(current, maximum float64) float64 {
+	if current >= maximum {
+		return maximum + 1
+	}
+	next := math.Floor(current) + 1
+	if next <= current {
+		next = current + 1
+	}
+	if next > maximum {
+		return maximum
+	}
+	return next
+}
+
 func (r *Renderer) isCollisionBoxBlocked(pos vec3.Vec3, collisionBuffer float64, climbable float64) bool {
 	halfWidth, halfDepth := r.collisionBoxHalfExtents()
-	minX, maxX, minY, maxY, ok := r.footprintTileRange(vec2.New(pos.X, pos.Y), halfWidth+collisionBuffer, halfDepth+collisionBuffer)
-	if !ok {
+	centerX := pos.X / float64(r.texSize)
+	centerY := pos.Y / float64(r.texSize)
+	extentX := halfWidth + collisionBuffer
+	extentY := halfDepth + collisionBuffer
+	if centerX-extentX < 0 || centerY-extentY < 0 ||
+		centerX+extentX >= float64(r.canvasWidth) || centerY+extentY >= float64(r.canvasHeight) {
 		return true
 	}
 
 	feetHeight := (pos.Z / float64(r.texSize)) - r.collisionBoxHeightBlocks()
 	blockLimit := feetHeight + climbable
-	for y := minY; y <= maxY; y++ {
-		for x := minX; x <= maxX; x++ {
-			if !r.isInsideWorldTile(x, y) {
-				return true
-			}
-			height := float64(r.Wld.HeightMap[y*r.canvasWidth+x])
-			if height > blockLimit {
-				return true
-			}
-		}
-	}
-
-	return false
+	height := r.maxGroundHeightInFootprint(
+		vec2.New(pos.X, pos.Y),
+		extentX,
+		extentY,
+	) / float64(r.texSize)
+	return height > blockLimit
 }
 
 func (r *Renderer) footprintTileRange(center vec2.Vec2, halfWidth, halfDepth float64) (minX, maxX, minY, maxY int, ok bool) {

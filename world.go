@@ -7,8 +7,11 @@ import (
 type World struct {
 	// levelUint8 [4][]uint8
 
-	WorldMap  [][]uint8 //texture ID map
-	HeightMap []uint8   //height map
+	WorldMap   [][]uint8 //texture ID map
+	HeightMap  []uint8   //height map
+	HeightBase []float32
+	SlopeX     []float32
+	SlopeY     []float32
 
 	screenWidth  int
 	screenHeight int
@@ -27,6 +30,9 @@ type World struct {
 func (w *World) Init(screenWidth int, screenHeight int, canvasWidth int, canvasHeight int, canvasDepth int) {
 	w.imageSrcBuffer = make([]uint8, screenWidth*screenHeight*4)
 	w.HeightMap = make([]uint8, canvasWidth*canvasHeight)
+	w.HeightBase = make([]float32, canvasWidth*canvasHeight)
+	w.SlopeX = make([]float32, canvasWidth*canvasHeight)
+	w.SlopeY = make([]float32, canvasWidth*canvasHeight)
 	w.WorldMap = make([][]uint8, canvasDepth)
 	for i := 0; i < canvasDepth; i++ {
 		w.WorldMap[i] = make([]uint8, canvasWidth*canvasHeight)
@@ -70,6 +76,55 @@ func (w *World) BuildHeightMapFromWorldMap() {
 		}
 		w.HeightMap[i] = uint8(height)
 	}
+	w.SyncHeightPlanesFromHeightMap()
+}
+
+func (w *World) SyncHeightPlanesFromHeightMap() {
+	hAt := func(x, y int) float32 {
+		if x < 0 {
+			x = 0
+		} else if x >= w.canvasWidth {
+			x = w.canvasWidth - 1
+		}
+		if y < 0 {
+			y = 0
+		} else if y >= w.canvasHeight {
+			y = w.canvasHeight - 1
+		}
+		return float32(w.HeightMap[y*w.canvasWidth+x])
+	}
+	clampSlope := func(v float32) float32 {
+		if v < -1 {
+			return -1
+		}
+		if v > 1 {
+			return 1
+		}
+		return v
+	}
+
+	for y := 0; y < w.canvasHeight; y++ {
+		for x := 0; x < w.canvasWidth; x++ {
+			idx := y*w.canvasWidth + x
+			h := hAt(x, y)
+			dx := (hAt(x+1, y) - hAt(x-1, y)) * 0.5
+			dy := (hAt(x, y+1) - hAt(x, y-1)) * 0.5
+			if x == 0 {
+				dx = hAt(x+1, y) - h
+			} else if x == w.canvasWidth-1 {
+				dx = h - hAt(x-1, y)
+			}
+			if y == 0 {
+				dy = hAt(x, y+1) - h
+			} else if y == w.canvasHeight-1 {
+				dy = h - hAt(x, y-1)
+			}
+
+			w.HeightBase[idx] = h
+			w.SlopeX[idx] = clampSlope(dx)
+			w.SlopeY[idx] = clampSlope(dy)
+		}
+	}
 }
 
 func (w *World) SetTextureID(x, y, z int, texID uint8) bool {
@@ -89,6 +144,9 @@ func (w *World) DeleteValue(x, y, z int) {
 		// fmt.Println("OK", z, int(w.HeightMap[y*w.canvasWidth+x]))
 		w.WorldMap[z-1][y*w.canvasWidth+x] = 0
 		w.HeightMap[y*w.canvasWidth+x] = uint8(z - 1)
+		w.HeightBase[y*w.canvasWidth+x] = float32(z - 1)
+		w.SlopeX[y*w.canvasWidth+x] = 0
+		w.SlopeY[y*w.canvasWidth+x] = 0
 	} else {
 		// fmt.Println("NG", z ,int(w.HeightMap[y*w.canvasWidth+x]))
 	}
@@ -100,6 +158,9 @@ func (w *World) SetValue(x, y, z int, value uint8) {
 		w.WorldMap[z-1][y*w.canvasWidth+x] = value + 1
 		if z > int(w.HeightMap[y*w.canvasWidth+x]) {
 			w.HeightMap[y*w.canvasWidth+x] = uint8(z)
+			w.HeightBase[y*w.canvasWidth+x] = float32(z)
+			w.SlopeX[y*w.canvasWidth+x] = 0
+			w.SlopeY[y*w.canvasWidth+x] = 0
 		}
 	} else {
 		// fmt.Println("NG", z-1 ,int(w.HeightMap[y*w.canvasWidth+x]))
@@ -116,6 +177,17 @@ func (w *World) SetValue(x, y, z int, value uint8) {
 
 	// op := &ebiten.DrawImageOptions{}
 	// me.texture.DrawImage(me.canvas, op)
+}
+
+func (w *World) SetHeightPlane(x, y int, base, slopeX, slopeY float32) bool {
+	if x < 0 || y < 0 || x >= w.canvasWidth || y >= w.canvasHeight {
+		return false
+	}
+	idx := y*w.canvasWidth + x
+	w.HeightBase[idx] = base
+	w.SlopeX[idx] = slopeX
+	w.SlopeY[idx] = slopeY
+	return true
 }
 
 /*
