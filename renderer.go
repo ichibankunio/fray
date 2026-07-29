@@ -573,6 +573,13 @@ func (r *Renderer) heightAtBlocks(x, y float64) float64 {
 	h10 := heightSample(x0+1, y0)
 	h01 := heightSample(x0, y0+1)
 	h11 := heightSample(x0+1, y0+1)
+	if r.Wld.TerrainInterpolation == TerrainInterpolationFlat {
+		return h00
+	}
+	if r.Wld.TerrainInterpolation == TerrainInterpolationSmooth {
+		fracX = fracX * fracX * (3 - 2*fracX)
+		fracY = fracY * fracY * (3 - 2*fracY)
+	}
 	top := h00 + (h10-h00)*fracX
 	bottom := h01 + (h11-h01)*fracX
 	return top + (bottom-top)*fracY
@@ -698,6 +705,7 @@ func (r *Renderer) renderWall(screen *ebiten.Image) {
 		"CeilingTextureID":      r.CeilingTextureID,
 		"DefaultFloorTextureID": r.DefaultFloorTextureID,
 		"DefaultFloorColor":     []float32{r.DefaultFloorColor[0], r.DefaultFloorColor[1], r.DefaultFloorColor[2]},
+		"TerrainInterpolation":  float32(r.Wld.TerrainInterpolation),
 		"AimHighlightEnabled":   float32(0),
 	}
 	if r.AimHighlightEnabled {

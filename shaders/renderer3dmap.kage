@@ -24,6 +24,7 @@ var CeilingTextureID float//ceiling texture index in imageSrc1 atlas
 var DefaultFloorTextureID float//default floor texture index in imageSrc1 atlas (<0 disables)
 var DefaultFloorColor vec3
 var AimHighlightEnabled float
+var TerrainInterpolation float
 
 var AimPos vec3
 var HandTextureID float
@@ -59,6 +60,12 @@ func HeightAt(pos vec2) float {
     h10 := HeightPlaneData(cell + vec2(1.0, 0.0)).x
     h01 := HeightPlaneData(cell + vec2(0.0, 1.0)).x
     h11 := HeightPlaneData(cell + vec2(1.0, 1.0)).x
+    if TerrainInterpolation < 0.5 {
+        return h00
+    }
+    if TerrainInterpolation > 1.5 {
+        frac = frac * frac * (vec2(3.0) - 2.0 * frac)
+    }
     top := h00 + (h10 - h00) * frac.x
     bottom := h01 + (h11 - h01) * frac.x
     return top + (bottom - top) * frac.y

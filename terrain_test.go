@@ -15,7 +15,8 @@ func newTerrainTestRenderer(heightMap []uint8) *Renderer {
 			collisionDistance: 0.25,
 		},
 		Wld: &World{
-			HeightMap: heightMap,
+			HeightMap:            heightMap,
+			TerrainInterpolation: TerrainInterpolationLinear,
 		},
 		canvasWidth:  2,
 		canvasHeight: 2,
@@ -24,6 +25,71 @@ func newTerrainTestRenderer(heightMap []uint8) *Renderer {
 	r.Cam.pos = vec3.New(32, 32, r.Cam.shooterHeight+32)
 	r.Cam.subjectPos = r.Cam.pos
 	return r
+}
+
+func TestHeightAtBlocksSupportsInterpolationModes(t *testing.T) {
+	r := newTerrainTestRenderer([]uint8{
+		0, 1,
+		0, 1,
+	})
+
+	r.Wld.TerrainInterpolation = TerrainInterpolationFlat
+	if got := r.heightAtBlocks(0.25, 0.5); got != 0 {
+		t.Fatalf("flat height = %v, want 0", got)
+	}
+
+	r.Wld.TerrainInterpolation = TerrainInterpolationLinear
+	if got := r.heightAtBlocks(0.25, 0.5); math.Abs(got-0.25) > 1e-9 {
+		t.Fatalf("linear height = %v, want 0.25", got)
+	}
+
+	r.Wld.TerrainInterpolation = TerrainInterpolationSmooth
+	if got := r.heightAtBlocks(0.25, 0.5); math.Abs(got-0.15625) > 1e-9 {
+		t.Fatalf("smooth height = %v, want 0.15625", got)
+	}
+}
+
+func TestLoadTerrainJSONV2(t *testing.T) {
+	w := &World{}
+	w.Init(64, 64, 2, 2, 2)
+
+	err := w.LoadTerrainJSON([]byte(`{
+		"version": 2,
+		"canvasWidth": 2,
+		"canvasHeight": 2,
+		"canvasDepth": 2,
+		"terrain": {"interpolation": "smooth"},
+		"layers": [[1, 1, 1, 1], [0, 0, 2, 0]]
+	}`))
+	if err != nil {
+		t.Fatalf("LoadTerrainJSON: %v", err)
+	}
+	if w.TerrainInterpolation != TerrainInterpolationSmooth {
+		t.Fatalf("interpolation = %v, want smooth", w.TerrainInterpolation)
+	}
+	wantHeights := []uint8{1, 1, 2, 1}
+	for i, want := range wantHeights {
+		if w.HeightMap[i] != want {
+			t.Fatalf("height[%d] = %d, want %d", i, w.HeightMap[i], want)
+		}
+	}
+}
+
+func TestLoadTerrainJSONRejectsUnknownInterpolation(t *testing.T) {
+	w := &World{}
+	w.Init(64, 64, 1, 1, 1)
+
+	err := w.LoadTerrainJSON([]byte(`{
+		"version": 2,
+		"canvasWidth": 1,
+		"canvasHeight": 1,
+		"canvasDepth": 1,
+		"terrain": {"interpolation": "roundish"},
+		"layers": [[1]]
+	}`))
+	if err == nil {
+		t.Fatal("LoadTerrainJSON accepted an unknown interpolation")
+	}
 }
 
 func TestHeightAtBlocksUsesBilinearInterpolation(t *testing.T) {

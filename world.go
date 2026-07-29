@@ -1,8 +1,32 @@
 package fray
 
 import (
+	"encoding/json"
+	"fmt"
+
 	"github.com/hajimehoshi/ebiten/v2"
 )
+
+type TerrainInterpolation uint8
+
+const (
+	TerrainInterpolationFlat TerrainInterpolation = iota
+	TerrainInterpolationLinear
+	TerrainInterpolationSmooth
+)
+
+type terrainJSONOptions struct {
+	Interpolation string `json:"interpolation"`
+}
+
+type terrainJSONDocument struct {
+	Version      int                `json:"version"`
+	CanvasWidth  int                `json:"canvasWidth"`
+	CanvasHeight int                `json:"canvasHeight"`
+	CanvasDepth  int                `json:"canvasDepth"`
+	Layers       [][]uint8          `json:"layers"`
+	Terrain      terrainJSONOptions `json:"terrain"`
+}
 
 type World struct {
 	// levelUint8 [4][]uint8
@@ -12,6 +36,8 @@ type World struct {
 	HeightBase []float32
 	SlopeX     []float32
 	SlopeY     []float32
+
+	TerrainInterpolation TerrainInterpolation
 
 	screenWidth  int
 	screenHeight int
@@ -43,6 +69,64 @@ func (w *World) Init(screenWidth int, screenHeight int, canvasWidth int, canvasH
 	w.canvasDepth = canvasDepth
 	w.screenHeight = screenHeight
 	w.screenWidth = screenWidth
+	w.TerrainInterpolation = TerrainInterpolationLinear
+}
+
+func (w *World) LoadTerrainJSON(data []byte) error {
+	var document terrainJSONDocument
+	if err := json.Unmarshal(data, &document); err != nil {
+		return fmt.Errorf("decode terrain JSON: %w", err)
+	}
+	if document.Version < 0 || document.Version > 2 {
+		return fmt.Errorf("unsupported terrain JSON version %d", document.Version)
+	}
+	if document.CanvasWidth != 0 && document.CanvasWidth != w.canvasWidth {
+		return fmt.Errorf("terrain width %d does not match world width %d", document.CanvasWidth, w.canvasWidth)
+	}
+	if document.CanvasHeight != 0 && document.CanvasHeight != w.canvasHeight {
+		return fmt.Errorf("terrain height %d does not match world height %d", document.CanvasHeight, w.canvasHeight)
+	}
+	if document.CanvasDepth != 0 && document.CanvasDepth > w.canvasDepth {
+		return fmt.Errorf("terrain depth %d exceeds world depth %d", document.CanvasDepth, w.canvasDepth)
+	}
+	if len(document.Layers) == 0 {
+		return fmt.Errorf("terrain JSON has no layers")
+	}
+
+	interpolation, err := parseTerrainInterpolation(document.Terrain.Interpolation)
+	if err != nil {
+		return err
+	}
+	w.TerrainInterpolation = interpolation
+
+	for z := range w.WorldMap {
+		clear(w.WorldMap[z])
+	}
+	layerCount := len(document.Layers)
+	if layerCount > len(w.WorldMap) {
+		layerCount = len(w.WorldMap)
+	}
+	for z := 0; z < layerCount; z++ {
+		if len(document.Layers[z]) > len(w.WorldMap[z]) {
+			return fmt.Errorf("terrain layer %d has %d cells, maximum is %d", z, len(document.Layers[z]), len(w.WorldMap[z]))
+		}
+		copy(w.WorldMap[z], document.Layers[z])
+	}
+	w.BuildHeightMapFromWorldMap()
+	return nil
+}
+
+func parseTerrainInterpolation(value string) (TerrainInterpolation, error) {
+	switch value {
+	case "", "linear":
+		return TerrainInterpolationLinear, nil
+	case "flat":
+		return TerrainInterpolationFlat, nil
+	case "smooth":
+		return TerrainInterpolationSmooth, nil
+	default:
+		return TerrainInterpolationLinear, fmt.Errorf("unknown terrain interpolation %q", value)
+	}
 }
 
 func (w *World) GetValue(x, y, z int) uint8 {
