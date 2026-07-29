@@ -544,65 +544,7 @@ func (r *Renderer) GetScreenHeight() float64 {
 }
 
 func (r *Renderer) heightAtBlocks(x, y float64) float64 {
-	maxX := float64(r.canvasWidth) - 1e-6
-	maxY := float64(r.canvasHeight) - 1e-6
-	if x < 0 {
-		x = 0
-	} else if x > maxX {
-		x = maxX
-	}
-	if y < 0 {
-		y = 0
-	} else if y > maxY {
-		y = maxY
-	}
-	cellX := math.Floor(x)
-	cellY := math.Floor(y)
-	fracX := x - cellX
-	fracY := y - cellY
-	heightSample := func(sampleX, sampleY int) float64 {
-		if sampleX < 0 || sampleY < 0 || sampleX >= r.canvasWidth || sampleY >= r.canvasHeight {
-			return 0
-		}
-		return float64(r.Wld.HeightMap[sampleY*r.canvasWidth+sampleX])
-	}
-
-	x0 := int(cellX)
-	y0 := int(cellY)
-	idx := y0*r.canvasWidth + x0
-	if idx >= 0 && idx < len(r.Wld.TerrainTileShapes) {
-		shape := TerrainTileShape(r.Wld.TerrainTileShapes[idx])
-		if shape != TerrainTileAuto {
-			base := r.Wld.TerrainTileBase[idx]
-			rise := r.Wld.TerrainTileRise[idx]
-			switch shape {
-			case TerrainTileFlat:
-				return float64(base)
-			case TerrainTileSlopeNorth:
-				return float64(base + rise*float32(1-fracY))
-			case TerrainTileSlopeSouth:
-				return float64(base + rise*float32(fracY))
-			case TerrainTileSlopeEast:
-				return float64(base + rise*float32(fracX))
-			case TerrainTileSlopeWest:
-				return float64(base + rise*float32(1-fracX))
-			}
-		}
-	}
-	h00 := heightSample(x0, y0)
-	h10 := heightSample(x0+1, y0)
-	h01 := heightSample(x0, y0+1)
-	h11 := heightSample(x0+1, y0+1)
-	if r.Wld.TerrainInterpolation == TerrainInterpolationFlat {
-		return h00
-	}
-	if r.Wld.TerrainInterpolation == TerrainInterpolationSmooth {
-		fracX = fracX * fracX * (3 - 2*fracX)
-		fracY = fracY * fracY * (3 - 2*fracY)
-	}
-	top := h00 + (h10-h00)*fracX
-	bottom := h01 + (h11-h01)*fracX
-	return top + (bottom-top)*fracY
+	return r.Wld.heightAtBlocks(x, y)
 }
 
 func (r *Renderer) Update() {

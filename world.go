@@ -3,6 +3,7 @@ package fray
 import (
 	"encoding/json"
 	"fmt"
+	"math"
 
 	"github.com/hajimehoshi/ebiten/v2"
 )
@@ -24,17 +25,27 @@ const (
 	TerrainTileSlopeSouth
 	TerrainTileSlopeEast
 	TerrainTileSlopeWest
+	TerrainTileCornerNorthEast
+	TerrainTileCornerSouthEast
+	TerrainTileCornerSouthWest
+	TerrainTileCornerNorthWest
+	TerrainTileRidgeNorthSouth
+	TerrainTileRidgeEastWest
+	TerrainTileValleyNorthSouth
+	TerrainTileValleyEastWest
 )
 
 type terrainJSONOptions struct {
-	Interpolation string            `json:"interpolation"`
-	Tiles         []terrainJSONTile `json:"tiles"`
+	Interpolation     string            `json:"interpolation"`
+	StrictConnections bool              `json:"strictConnections"`
+	Tiles             []terrainJSONTile `json:"tiles"`
 }
 
 type terrainJSONTile struct {
 	X          int      `json:"x"`
 	Y          int      `json:"y"`
 	Shape      string   `json:"shape"`
+	Rotation   int      `json:"rotation,omitempty"`
 	BaseHeight *float32 `json:"baseHeight,omitempty"`
 	Rise       *float32 `json:"rise,omitempty"`
 }
@@ -146,7 +157,7 @@ func (w *World) LoadTerrainJSON(data []byte) error {
 		if tile.X < 0 || tile.Y < 0 || tile.X >= w.canvasWidth || tile.Y >= w.canvasHeight {
 			return fmt.Errorf("terrain tile %d coordinate (%d,%d) is outside the world", i, tile.X, tile.Y)
 		}
-		shape, err := parseTerrainTileShape(tile.Shape)
+		shape, err := parseTerrainTileShape(tile.Shape, tile.Rotation)
 		if err != nil {
 			return fmt.Errorf("terrain tile %d: %w", i, err)
 		}
@@ -159,6 +170,11 @@ func (w *World) LoadTerrainJSON(data []byte) error {
 			w.TerrainTileRise[idx] = *tile.Rise
 		} else if shape != TerrainTileAuto && shape != TerrainTileFlat {
 			w.TerrainTileRise[idx] = 1
+		}
+	}
+	if document.Terrain.StrictConnections {
+		if err := w.ValidateTerrainConnections(1.0 / 32.0); err != nil {
+			return err
 		}
 	}
 	return nil
@@ -177,7 +193,10 @@ func parseTerrainInterpolation(value string) (TerrainInterpolation, error) {
 	}
 }
 
-func parseTerrainTileShape(value string) (TerrainTileShape, error) {
+func parseTerrainTileShape(value string, rotation int) (TerrainTileShape, error) {
+	if rotation < 0 || rotation >= 360 || rotation%90 != 0 {
+		return TerrainTileAuto, fmt.Errorf("rotation must be 0, 90, 180, or 270, got %d", rotation)
+	}
 	switch value {
 	case "", "auto":
 		return TerrainTileAuto, nil
@@ -191,9 +210,120 @@ func parseTerrainTileShape(value string) (TerrainTileShape, error) {
 		return TerrainTileSlopeEast, nil
 	case "slope_west":
 		return TerrainTileSlopeWest, nil
+	case "corner_slope":
+		return TerrainTileShape(int(TerrainTileCornerNorthEast) + rotation/90), nil
+	case "ridge":
+		if rotation%180 == 0 {
+			return TerrainTileRidgeNorthSouth, nil
+		}
+		return TerrainTileRidgeEastWest, nil
+	case "valley":
+		if rotation%180 == 0 {
+			return TerrainTileValleyNorthSouth, nil
+		}
+		return TerrainTileValleyEastWest, nil
 	default:
 		return TerrainTileAuto, fmt.Errorf("unknown terrain tile shape %q", value)
 	}
+}
+
+func (w *World) heightAtBlocks(x, y float64) float64 {
+	maxX := float64(w.canvasWidth) - 1e-6
+	maxY := float64(w.canvasHeight) - 1e-6
+	x = math.Max(0, math.Min(maxX, x))
+	y = math.Max(0, math.Min(maxY, y))
+	cellX := int(math.Floor(x))
+	cellY := int(math.Floor(y))
+	return w.heightInCell(cellX, cellY, x-float64(cellX), y-float64(cellY))
+}
+
+func (w *World) heightInCell(cellX, cellY int, fracX, fracY float64) float64 {
+	idx := cellY*w.canvasWidth + cellX
+	if idx >= 0 && idx < len(w.TerrainTileShapes) {
+		shape := TerrainTileShape(w.TerrainTileShapes[idx])
+		if shape != TerrainTileAuto {
+			base := float64(w.TerrainTileBase[idx])
+			rise := float64(w.TerrainTileRise[idx])
+			switch shape {
+			case TerrainTileFlat:
+				return base
+			case TerrainTileSlopeNorth:
+				return base + rise*(1-fracY)
+			case TerrainTileSlopeSouth:
+				return base + rise*fracY
+			case TerrainTileSlopeEast:
+				return base + rise*fracX
+			case TerrainTileSlopeWest:
+				return base + rise*(1-fracX)
+			case TerrainTileCornerNorthEast:
+				return base + rise*fracX*(1-fracY)
+			case TerrainTileCornerSouthEast:
+				return base + rise*fracX*fracY
+			case TerrainTileCornerSouthWest:
+				return base + rise*(1-fracX)*fracY
+			case TerrainTileCornerNorthWest:
+				return base + rise*(1-fracX)*(1-fracY)
+			case TerrainTileRidgeNorthSouth:
+				return base + rise*(1-math.Abs(fracX*2-1))
+			case TerrainTileRidgeEastWest:
+				return base + rise*(1-math.Abs(fracY*2-1))
+			case TerrainTileValleyNorthSouth:
+				return base + rise*math.Abs(fracX*2-1)
+			case TerrainTileValleyEastWest:
+				return base + rise*math.Abs(fracY*2-1)
+			}
+		}
+	}
+
+	heightSample := func(x, y int) float64 {
+		if x < 0 || y < 0 || x >= w.canvasWidth || y >= w.canvasHeight {
+			return 0
+		}
+		return float64(w.HeightMap[y*w.canvasWidth+x])
+	}
+	h00 := heightSample(cellX, cellY)
+	if w.TerrainInterpolation == TerrainInterpolationFlat {
+		return h00
+	}
+	if w.TerrainInterpolation == TerrainInterpolationSmooth {
+		fracX = fracX * fracX * (3 - 2*fracX)
+		fracY = fracY * fracY * (3 - 2*fracY)
+	}
+	h10 := heightSample(cellX+1, cellY)
+	h01 := heightSample(cellX, cellY+1)
+	h11 := heightSample(cellX+1, cellY+1)
+	top := h00 + (h10-h00)*fracX
+	bottom := h01 + (h11-h01)*fracX
+	return top + (bottom-top)*fracY
+}
+
+func (w *World) ValidateTerrainConnections(tolerance float64) error {
+	const samples = 8
+	for y := 0; y < w.canvasHeight; y++ {
+		for x := 0; x < w.canvasWidth; x++ {
+			if x+1 < w.canvasWidth {
+				for i := 0; i <= samples; i++ {
+					t := float64(i) / samples
+					left := w.heightInCell(x, y, 1, t)
+					right := w.heightInCell(x+1, y, 0, t)
+					if math.Abs(left-right) > tolerance {
+						return fmt.Errorf("terrain seam between (%d,%d) and (%d,%d): %.3f vs %.3f", x, y, x+1, y, left, right)
+					}
+				}
+			}
+			if y+1 < w.canvasHeight {
+				for i := 0; i <= samples; i++ {
+					t := float64(i) / samples
+					top := w.heightInCell(x, y, t, 1)
+					bottom := w.heightInCell(x, y+1, t, 0)
+					if math.Abs(top-bottom) > tolerance {
+						return fmt.Errorf("terrain seam between (%d,%d) and (%d,%d): %.3f vs %.3f", x, y, x, y+1, top, bottom)
+					}
+				}
+			}
+		}
+	}
+	return nil
 }
 
 func (w *World) GetValue(x, y, z int) uint8 {

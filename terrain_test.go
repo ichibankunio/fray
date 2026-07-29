@@ -17,6 +17,8 @@ func newTerrainTestRenderer(heightMap []uint8) *Renderer {
 		Wld: &World{
 			HeightMap:            heightMap,
 			TerrainInterpolation: TerrainInterpolationLinear,
+			canvasWidth:          2,
+			canvasHeight:         2,
 		},
 		canvasWidth:  2,
 		canvasHeight: 2,
@@ -109,6 +111,54 @@ func TestTerrainTilePrimitiveHeight(t *testing.T) {
 	}
 	if got := r.heightAtBlocks(0.75, 0.5); math.Abs(got-1.75) > 1e-9 {
 		t.Fatalf("east slope height = %v, want 1.75", got)
+	}
+}
+
+func TestAdvancedTerrainTilePrimitiveHeights(t *testing.T) {
+	tests := []struct {
+		name  string
+		shape TerrainTileShape
+		x     float64
+		y     float64
+		want  float64
+	}{
+		{"corner northeast high corner", TerrainTileCornerNorthEast, 1, 0, 1},
+		{"corner northeast opposite corner", TerrainTileCornerNorthEast, 0, 1, 0},
+		{"north-south ridge center", TerrainTileRidgeNorthSouth, 0.5, 0.25, 1},
+		{"north-south ridge edge", TerrainTileRidgeNorthSouth, 0, 0.25, 0},
+		{"north-south valley center", TerrainTileValleyNorthSouth, 0.5, 0.25, 0},
+		{"north-south valley edge", TerrainTileValleyNorthSouth, 0, 0.25, 1},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			w := &World{}
+			w.Init(64, 64, 1, 1, 1)
+			w.TerrainTileShapes[0] = uint8(test.shape)
+			w.TerrainTileRise[0] = 1
+			got := w.heightInCell(0, 0, test.x, test.y)
+			if math.Abs(got-test.want) > 1e-9 {
+				t.Fatalf("height = %v, want %v", got, test.want)
+			}
+		})
+	}
+}
+
+func TestTerrainConnectionValidation(t *testing.T) {
+	w := &World{}
+	w.Init(64, 64, 2, 1, 1)
+	w.TerrainTileShapes[0] = uint8(TerrainTileSlopeEast)
+	w.TerrainTileRise[0] = 1
+	w.TerrainTileShapes[1] = uint8(TerrainTileFlat)
+	w.TerrainTileBase[1] = 1
+
+	if err := w.ValidateTerrainConnections(1e-9); err != nil {
+		t.Fatalf("continuous tiles rejected: %v", err)
+	}
+
+	w.TerrainTileBase[1] = 0
+	if err := w.ValidateTerrainConnections(1e-9); err == nil {
+		t.Fatal("discontinuous tiles accepted")
 	}
 }
 

@@ -62,7 +62,31 @@ func HeightAtCell(cell vec2, pos vec2) float {
         if tile.z < 4.5 {
             return tile.x + tile.y * frac.x
         }
-        return tile.x + tile.y * (1.0 - frac.x)
+        if tile.z < 5.5 {
+            return tile.x + tile.y * (1.0 - frac.x)
+        }
+        if tile.z < 6.5 {
+            return tile.x + tile.y * frac.x * (1.0 - frac.y)
+        }
+        if tile.z < 7.5 {
+            return tile.x + tile.y * frac.x * frac.y
+        }
+        if tile.z < 8.5 {
+            return tile.x + tile.y * (1.0 - frac.x) * frac.y
+        }
+        if tile.z < 9.5 {
+            return tile.x + tile.y * (1.0 - frac.x) * (1.0 - frac.y)
+        }
+        if tile.z < 10.5 {
+            return tile.x + tile.y * (1.0 - abs(frac.x * 2.0 - 1.0))
+        }
+        if tile.z < 11.5 {
+            return tile.x + tile.y * (1.0 - abs(frac.y * 2.0 - 1.0))
+        }
+        if tile.z < 12.5 {
+            return tile.x + tile.y * abs(frac.x * 2.0 - 1.0)
+        }
+        return tile.x + tile.y * abs(frac.y * 2.0 - 1.0)
     }
     return HeightAt(pos)
 }
