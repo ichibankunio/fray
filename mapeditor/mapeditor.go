@@ -190,7 +190,8 @@ func (me *MapEditor) PrintHeightPlaneMap(base, slopeX, slopeY []float32, dst *eb
 }
 
 // PrintTerrainMap encodes terrain base height, signed rise, and primitive shape
-// for the renderer shader. Rise uses 1/32-block precision around 128.
+// for the renderer shader. Base uses 1/4-block precision and rise uses
+// 1/32-block precision around 128.
 func (me *MapEditor) PrintTerrainMap(base, rise []float32, shapes []uint8, dst *ebiten.Image) {
 	if cap(me.heightPlaneBuffer) < me.screenWidth*me.screenHeight*4 {
 		me.heightPlaneBuffer = make([]uint8, me.screenWidth*me.screenHeight*4)
@@ -204,7 +205,7 @@ func (me *MapEditor) PrintTerrainMap(base, rise []float32, shapes []uint8, dst *
 	n = min(n, len(shapes))
 	n = min(n, me.canvasWidth*me.canvasHeight)
 	for i := 0; i < n; i++ {
-		baseValue := max(float32(0), min(float32(255), base[i]))
+		baseValue := max(float32(0), min(float32(255), base[i]*4))
 		encodedRise := max(float32(0), min(float32(255), rise[i]*32+128))
 		dstIdx := ((i/me.canvasWidth)*me.screenWidth + (i % me.canvasWidth)) * 4
 		buffer[dstIdx] = uint8(baseValue + 0.5)

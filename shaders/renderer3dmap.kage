@@ -43,7 +43,7 @@ var HandTextureID float
 
 func TerrainTileData(cell vec2) vec3 {
     data := imageSrc3UnsafeAt(imageSrc0Origin() + cell) * 255
-    return vec3(data.r, (data.g - 128.0) / 32.0, data.b)
+    return vec3(data.r / 4.0, (data.g - 128.0) / 32.0, data.b)
 }
 
 func HeightAtCell(cell vec2, pos vec2) float {
