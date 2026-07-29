@@ -130,6 +130,22 @@ func TestCollisionAllowsOneToOneSlope(t *testing.T) {
 	}
 }
 
+func TestCollisionAllowsSmoothOneToOneSlope(t *testing.T) {
+	r := newTerrainTestRenderer([]uint8{
+		0, 1,
+		0, 1,
+	})
+	r.Wld.TerrainInterpolation = TerrainInterpolationSmooth
+	ground := r.GetGroundHeightUnderCollisionBox(vec2.New(r.Cam.subjectPos.X, r.Cam.subjectPos.Y))
+	r.Cam.pos.Z = ground + r.Cam.shooterHeight
+	r.Cam.subjectPos = r.Cam.pos
+
+	got := r.collisionCheckedDelta(r.Cam.subjectPos, vec2.New(10, 0), r.Cam.collisionDistance)
+	if got.X != 10 {
+		t.Fatalf("smooth slope movement X = %v, want 10", got.X)
+	}
+}
+
 func TestCollisionRejectsSharperRise(t *testing.T) {
 	r := newTerrainTestRenderer([]uint8{
 		0, 3,
