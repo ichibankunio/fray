@@ -41,25 +41,43 @@ var HandTextureID float
 //imageSrc2: mapData layers
 //imageSrc3: mapData layers
 
-func HeightPlaneData(cell vec2) vec3 {
-    plane := imageSrc3UnsafeAt(imageSrc0Origin() + cell) * 255
-    base := plane.r
-    slopeX := (plane.g - 128.0) / 128.0
-    slopeY := (plane.b - 128.0) / 128.0
-    return vec3(base, slopeX, slopeY)
+func TerrainTileData(cell vec2) vec3 {
+    data := imageSrc3UnsafeAt(imageSrc0Origin() + cell) * 255
+    return vec3(data.r, (data.g - 128.0) / 32.0, data.b)
 }
 
 func HeightAtCell(cell vec2, pos vec2) float {
+    frac := pos - cell
+    tile := TerrainTileData(cell)
+    if tile.z > 0.5 {
+        if tile.z < 1.5 {
+            return tile.x
+        }
+        if tile.z < 2.5 {
+            return tile.x + tile.y * (1.0 - frac.y)
+        }
+        if tile.z < 3.5 {
+            return tile.x + tile.y * frac.y
+        }
+        if tile.z < 4.5 {
+            return tile.x + tile.y * frac.x
+        }
+        return tile.x + tile.y * (1.0 - frac.x)
+    }
     return HeightAt(pos)
 }
 
 func HeightAt(pos vec2) float {
     cell := floor(pos)
     frac := pos - cell
-    h00 := HeightPlaneData(cell).x
-    h10 := HeightPlaneData(cell + vec2(1.0, 0.0)).x
-    h01 := HeightPlaneData(cell + vec2(0.0, 1.0)).x
-    h11 := HeightPlaneData(cell + vec2(1.0, 1.0)).x
+    tile := TerrainTileData(cell)
+    if tile.z > 0.5 {
+        return HeightAtCell(cell, pos)
+    }
+    h00 := tile.x
+    h10 := TerrainTileData(cell + vec2(1.0, 0.0)).x
+    h01 := TerrainTileData(cell + vec2(0.0, 1.0)).x
+    h11 := TerrainTileData(cell + vec2(1.0, 1.0)).x
     if TerrainInterpolation < 0.5 {
         return h00
     }

@@ -15,8 +15,28 @@ const (
 	TerrainInterpolationSmooth
 )
 
+type TerrainTileShape uint8
+
+const (
+	TerrainTileAuto TerrainTileShape = iota
+	TerrainTileFlat
+	TerrainTileSlopeNorth
+	TerrainTileSlopeSouth
+	TerrainTileSlopeEast
+	TerrainTileSlopeWest
+)
+
 type terrainJSONOptions struct {
-	Interpolation string `json:"interpolation"`
+	Interpolation string            `json:"interpolation"`
+	Tiles         []terrainJSONTile `json:"tiles"`
+}
+
+type terrainJSONTile struct {
+	X          int      `json:"x"`
+	Y          int      `json:"y"`
+	Shape      string   `json:"shape"`
+	BaseHeight *float32 `json:"baseHeight,omitempty"`
+	Rise       *float32 `json:"rise,omitempty"`
 }
 
 type terrainJSONDocument struct {
@@ -38,6 +58,9 @@ type World struct {
 	SlopeY     []float32
 
 	TerrainInterpolation TerrainInterpolation
+	TerrainTileShapes    []uint8
+	TerrainTileBase      []float32
+	TerrainTileRise      []float32
 
 	screenWidth  int
 	screenHeight int
@@ -59,6 +82,9 @@ func (w *World) Init(screenWidth int, screenHeight int, canvasWidth int, canvasH
 	w.HeightBase = make([]float32, canvasWidth*canvasHeight)
 	w.SlopeX = make([]float32, canvasWidth*canvasHeight)
 	w.SlopeY = make([]float32, canvasWidth*canvasHeight)
+	w.TerrainTileShapes = make([]uint8, canvasWidth*canvasHeight)
+	w.TerrainTileBase = make([]float32, canvasWidth*canvasHeight)
+	w.TerrainTileRise = make([]float32, canvasWidth*canvasHeight)
 	w.WorldMap = make([][]uint8, canvasDepth)
 	for i := 0; i < canvasDepth; i++ {
 		w.WorldMap[i] = make([]uint8, canvasWidth*canvasHeight)
@@ -77,7 +103,7 @@ func (w *World) LoadTerrainJSON(data []byte) error {
 	if err := json.Unmarshal(data, &document); err != nil {
 		return fmt.Errorf("decode terrain JSON: %w", err)
 	}
-	if document.Version < 0 || document.Version > 2 {
+	if document.Version < 0 || document.Version > 3 {
 		return fmt.Errorf("unsupported terrain JSON version %d", document.Version)
 	}
 	if document.CanvasWidth != 0 && document.CanvasWidth != w.canvasWidth {
@@ -113,6 +139,28 @@ func (w *World) LoadTerrainJSON(data []byte) error {
 		copy(w.WorldMap[z], document.Layers[z])
 	}
 	w.BuildHeightMapFromWorldMap()
+	copy(w.TerrainTileBase, w.HeightBase)
+	clear(w.TerrainTileShapes)
+	clear(w.TerrainTileRise)
+	for i, tile := range document.Terrain.Tiles {
+		if tile.X < 0 || tile.Y < 0 || tile.X >= w.canvasWidth || tile.Y >= w.canvasHeight {
+			return fmt.Errorf("terrain tile %d coordinate (%d,%d) is outside the world", i, tile.X, tile.Y)
+		}
+		shape, err := parseTerrainTileShape(tile.Shape)
+		if err != nil {
+			return fmt.Errorf("terrain tile %d: %w", i, err)
+		}
+		idx := tile.Y*w.canvasWidth + tile.X
+		w.TerrainTileShapes[idx] = uint8(shape)
+		if tile.BaseHeight != nil {
+			w.TerrainTileBase[idx] = *tile.BaseHeight
+		}
+		if tile.Rise != nil {
+			w.TerrainTileRise[idx] = *tile.Rise
+		} else if shape != TerrainTileAuto && shape != TerrainTileFlat {
+			w.TerrainTileRise[idx] = 1
+		}
+	}
 	return nil
 }
 
@@ -126,6 +174,25 @@ func parseTerrainInterpolation(value string) (TerrainInterpolation, error) {
 		return TerrainInterpolationSmooth, nil
 	default:
 		return TerrainInterpolationLinear, fmt.Errorf("unknown terrain interpolation %q", value)
+	}
+}
+
+func parseTerrainTileShape(value string) (TerrainTileShape, error) {
+	switch value {
+	case "", "auto":
+		return TerrainTileAuto, nil
+	case "flat":
+		return TerrainTileFlat, nil
+	case "slope_north":
+		return TerrainTileSlopeNorth, nil
+	case "slope_south":
+		return TerrainTileSlopeSouth, nil
+	case "slope_east":
+		return TerrainTileSlopeEast, nil
+	case "slope_west":
+		return TerrainTileSlopeWest, nil
+	default:
+		return TerrainTileAuto, fmt.Errorf("unknown terrain tile shape %q", value)
 	}
 }
 

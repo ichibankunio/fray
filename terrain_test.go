@@ -92,6 +92,54 @@ func TestLoadTerrainJSONRejectsUnknownInterpolation(t *testing.T) {
 	}
 }
 
+func TestTerrainTilePrimitiveHeight(t *testing.T) {
+	r := newTerrainTestRenderer([]uint8{
+		1, 1,
+		1, 1,
+	})
+	r.Wld.TerrainTileShapes = make([]uint8, 4)
+	r.Wld.TerrainTileBase = make([]float32, 4)
+	r.Wld.TerrainTileRise = make([]float32, 4)
+	r.Wld.TerrainTileShapes[0] = uint8(TerrainTileSlopeEast)
+	r.Wld.TerrainTileBase[0] = 1
+	r.Wld.TerrainTileRise[0] = 1
+
+	if got := r.heightAtBlocks(0.25, 0.5); math.Abs(got-1.25) > 1e-9 {
+		t.Fatalf("east slope height = %v, want 1.25", got)
+	}
+	if got := r.heightAtBlocks(0.75, 0.5); math.Abs(got-1.75) > 1e-9 {
+		t.Fatalf("east slope height = %v, want 1.75", got)
+	}
+}
+
+func TestLoadTerrainJSONV3TilePrimitive(t *testing.T) {
+	w := &World{}
+	w.Init(64, 64, 2, 2, 2)
+
+	err := w.LoadTerrainJSON([]byte(`{
+		"version": 3,
+		"canvasWidth": 2,
+		"canvasHeight": 2,
+		"canvasDepth": 2,
+		"terrain": {
+			"interpolation": "linear",
+			"tiles": [
+				{"x": 0, "y": 0, "shape": "slope_east", "baseHeight": 1, "rise": 1}
+			]
+		},
+		"layers": [[1, 1, 1, 1]]
+	}`))
+	if err != nil {
+		t.Fatalf("LoadTerrainJSON: %v", err)
+	}
+	if got := TerrainTileShape(w.TerrainTileShapes[0]); got != TerrainTileSlopeEast {
+		t.Fatalf("shape = %v, want slope east", got)
+	}
+	if w.TerrainTileBase[0] != 1 || w.TerrainTileRise[0] != 1 {
+		t.Fatalf("primitive data = (%v,%v), want (1,1)", w.TerrainTileBase[0], w.TerrainTileRise[0])
+	}
+}
+
 func TestHeightAtBlocksUsesBilinearInterpolation(t *testing.T) {
 	r := newTerrainTestRenderer([]uint8{
 		0, 1,

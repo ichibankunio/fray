@@ -569,6 +569,26 @@ func (r *Renderer) heightAtBlocks(x, y float64) float64 {
 
 	x0 := int(cellX)
 	y0 := int(cellY)
+	idx := y0*r.canvasWidth + x0
+	if idx >= 0 && idx < len(r.Wld.TerrainTileShapes) {
+		shape := TerrainTileShape(r.Wld.TerrainTileShapes[idx])
+		if shape != TerrainTileAuto {
+			base := r.Wld.TerrainTileBase[idx]
+			rise := r.Wld.TerrainTileRise[idx]
+			switch shape {
+			case TerrainTileFlat:
+				return float64(base)
+			case TerrainTileSlopeNorth:
+				return float64(base + rise*float32(1-fracY))
+			case TerrainTileSlopeSouth:
+				return float64(base + rise*float32(fracY))
+			case TerrainTileSlopeEast:
+				return float64(base + rise*float32(fracX))
+			case TerrainTileSlopeWest:
+				return float64(base + rise*float32(1-fracX))
+			}
+		}
+	}
 	h00 := heightSample(x0, y0)
 	h10 := heightSample(x0+1, y0)
 	h01 := heightSample(x0, y0+1)
