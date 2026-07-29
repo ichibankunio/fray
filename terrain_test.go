@@ -112,6 +112,26 @@ func TestTerrainTilePrimitiveHeight(t *testing.T) {
 	}
 }
 
+func TestCollisionAllowsPrimitiveSlope(t *testing.T) {
+	r := newTerrainTestRenderer([]uint8{
+		1, 1,
+		1, 1,
+	})
+	r.Wld.TerrainTileShapes = make([]uint8, 4)
+	r.Wld.TerrainTileBase = make([]float32, 4)
+	r.Wld.TerrainTileRise = make([]float32, 4)
+	r.Wld.TerrainTileShapes[0] = uint8(TerrainTileSlopeEast)
+	r.Wld.TerrainTileRise[0] = 1
+	ground := r.GetGroundHeightUnderCollisionBox(vec2.New(r.Cam.subjectPos.X, r.Cam.subjectPos.Y))
+	r.Cam.pos.Z = ground + r.Cam.shooterHeight
+	r.Cam.subjectPos = r.Cam.pos
+
+	got := r.collisionCheckedDelta(r.Cam.subjectPos, vec2.New(10, 0), r.Cam.collisionDistance)
+	if got.X != 10 {
+		t.Fatalf("primitive slope movement X = %v, want 10", got.X)
+	}
+}
+
 func TestLoadTerrainJSONV3TilePrimitive(t *testing.T) {
 	w := &World{}
 	w.Init(64, 64, 2, 2, 2)
