@@ -189,42 +189,6 @@ func (me *MapEditor) PrintHeightPlaneMap(base, slopeX, slopeY []float32, dst *eb
 	target.WritePixels(buffer)
 }
 
-// PrintTerrainMap encodes terrain base height, signed rise, and primitive shape
-// for the renderer shader. Base uses 1/4-block precision and rise uses
-// 1/32-block precision around 128.
-func (me *MapEditor) PrintTerrainMap(base, rise []float32, shapes []uint8, dst *ebiten.Image) {
-	if cap(me.heightPlaneBuffer) < me.screenWidth*me.screenHeight*4 {
-		me.heightPlaneBuffer = make([]uint8, me.screenWidth*me.screenHeight*4)
-	} else {
-		me.heightPlaneBuffer = me.heightPlaneBuffer[:me.screenWidth*me.screenHeight*4]
-	}
-	buffer := me.heightPlaneBuffer
-	clear(buffer)
-
-	n := min(len(base), len(rise))
-	n = min(n, len(shapes))
-	n = min(n, me.canvasWidth*me.canvasHeight)
-	for i := 0; i < n; i++ {
-		encodedRise := max(float32(0), min(float32(255), rise[i]*32+128))
-		dstIdx := ((i/me.canvasWidth)*me.screenWidth + (i % me.canvasWidth)) * 4
-		buffer[dstIdx] = encodeTerrainBase(base[i])
-		buffer[dstIdx+1] = uint8(encodedRise + 0.5)
-		buffer[dstIdx+2] = shapes[i]
-		buffer[dstIdx+3] = 255
-	}
-
-	target := dst
-	if b := dst.Bounds(); b.Dx() != me.screenWidth || b.Dy() != me.screenHeight {
-		target = dst.SubImage(image.Rect(0, 0, me.screenWidth, me.screenHeight)).(*ebiten.Image)
-	}
-	target.WritePixels(buffer)
-}
-
-func encodeTerrainBase(base float32) uint8 {
-	value := max(float32(0), min(float32(255), base*4))
-	return uint8(value + 0.5)
-}
-
 func (me *MapEditor) WriteWorldMapImage(worldMap [][]uint8, heightMap []uint8) *ebiten.Image {
 	//math.Ceil(float64(me.canvasDepth)/float64((me.screenWidth/me.canvasWidth)*3))個、canvasを横に並べられる
 	dst := ebiten.NewImage(me.screenWidth, me.canvasHeight*int(math.Ceil(float64(me.canvasDepth)/float64((me.screenWidth/me.canvasWidth)*3))))

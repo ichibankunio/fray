@@ -1,6 +1,7 @@
 package fray
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"math"
@@ -13,41 +14,14 @@ type TerrainInterpolation uint8
 const (
 	TerrainInterpolationFlat TerrainInterpolation = iota
 	TerrainInterpolationLinear
-	TerrainInterpolationSmooth
-)
+	TerrainInterpolationMonotonic
 
-type TerrainTileShape uint8
-
-const (
-	TerrainTileAuto TerrainTileShape = iota
-	TerrainTileFlat
-	TerrainTileSlopeNorth
-	TerrainTileSlopeSouth
-	TerrainTileSlopeEast
-	TerrainTileSlopeWest
-	TerrainTileCornerNorthEast
-	TerrainTileCornerSouthEast
-	TerrainTileCornerSouthWest
-	TerrainTileCornerNorthWest
-	TerrainTileRidgeNorthSouth
-	TerrainTileRidgeEastWest
-	TerrainTileValleyNorthSouth
-	TerrainTileValleyEastWest
+	// TerrainInterpolationSmooth is kept as a source-compatible alias.
+	TerrainInterpolationSmooth = TerrainInterpolationMonotonic
 )
 
 type terrainJSONOptions struct {
-	Interpolation     string            `json:"interpolation"`
-	StrictConnections bool              `json:"strictConnections"`
-	Tiles             []terrainJSONTile `json:"tiles"`
-}
-
-type terrainJSONTile struct {
-	X          int      `json:"x"`
-	Y          int      `json:"y"`
-	Shape      string   `json:"shape"`
-	Rotation   int      `json:"rotation,omitempty"`
-	BaseHeight *float32 `json:"baseHeight,omitempty"`
-	Rise       *float32 `json:"rise,omitempty"`
+	Interpolation string `json:"interpolation"`
 }
 
 type terrainJSONDocument struct {
@@ -60,18 +34,13 @@ type terrainJSONDocument struct {
 }
 
 type World struct {
-	// levelUint8 [4][]uint8
-
-	WorldMap   [][]uint8 //texture ID map
-	HeightMap  []uint8   //height map
+	WorldMap   [][]uint8 // texture ID map
+	HeightMap  []uint8   // height inferred from WorldMap
 	HeightBase []float32
 	SlopeX     []float32
 	SlopeY     []float32
 
 	TerrainInterpolation TerrainInterpolation
-	TerrainTileShapes    []uint8
-	TerrainTileBase      []float32
-	TerrainTileRise      []float32
 
 	screenWidth  int
 	screenHeight int
@@ -93,9 +62,6 @@ func (w *World) Init(screenWidth int, screenHeight int, canvasWidth int, canvasH
 	w.HeightBase = make([]float32, canvasWidth*canvasHeight)
 	w.SlopeX = make([]float32, canvasWidth*canvasHeight)
 	w.SlopeY = make([]float32, canvasWidth*canvasHeight)
-	w.TerrainTileShapes = make([]uint8, canvasWidth*canvasHeight)
-	w.TerrainTileBase = make([]float32, canvasWidth*canvasHeight)
-	w.TerrainTileRise = make([]float32, canvasWidth*canvasHeight)
 	w.WorldMap = make([][]uint8, canvasDepth)
 	for i := 0; i < canvasDepth; i++ {
 		w.WorldMap[i] = make([]uint8, canvasWidth*canvasHeight)
@@ -111,7 +77,9 @@ func (w *World) Init(screenWidth int, screenHeight int, canvasWidth int, canvasH
 
 func (w *World) LoadTerrainJSON(data []byte) error {
 	var document terrainJSONDocument
-	if err := json.Unmarshal(data, &document); err != nil {
+	decoder := json.NewDecoder(bytes.NewReader(data))
+	decoder.DisallowUnknownFields()
+	if err := decoder.Decode(&document); err != nil {
 		return fmt.Errorf("decode terrain JSON: %w", err)
 	}
 	if document.Version < 0 || document.Version > 3 {
@@ -139,10 +107,7 @@ func (w *World) LoadTerrainJSON(data []byte) error {
 	for z := range w.WorldMap {
 		clear(w.WorldMap[z])
 	}
-	layerCount := len(document.Layers)
-	if layerCount > len(w.WorldMap) {
-		layerCount = len(w.WorldMap)
-	}
+	layerCount := min(len(document.Layers), len(w.WorldMap))
 	for z := 0; z < layerCount; z++ {
 		if len(document.Layers[z]) > len(w.WorldMap[z]) {
 			return fmt.Errorf("terrain layer %d has %d cells, maximum is %d", z, len(document.Layers[z]), len(w.WorldMap[z]))
@@ -150,33 +115,6 @@ func (w *World) LoadTerrainJSON(data []byte) error {
 		copy(w.WorldMap[z], document.Layers[z])
 	}
 	w.BuildHeightMapFromWorldMap()
-	copy(w.TerrainTileBase, w.HeightBase)
-	clear(w.TerrainTileShapes)
-	clear(w.TerrainTileRise)
-	for i, tile := range document.Terrain.Tiles {
-		if tile.X < 0 || tile.Y < 0 || tile.X >= w.canvasWidth || tile.Y >= w.canvasHeight {
-			return fmt.Errorf("terrain tile %d coordinate (%d,%d) is outside the world", i, tile.X, tile.Y)
-		}
-		shape, err := parseTerrainTileShape(tile.Shape, tile.Rotation)
-		if err != nil {
-			return fmt.Errorf("terrain tile %d: %w", i, err)
-		}
-		idx := tile.Y*w.canvasWidth + tile.X
-		w.TerrainTileShapes[idx] = uint8(shape)
-		if tile.BaseHeight != nil {
-			w.TerrainTileBase[idx] = *tile.BaseHeight
-		}
-		if tile.Rise != nil {
-			w.TerrainTileRise[idx] = *tile.Rise
-		} else if shape != TerrainTileAuto && shape != TerrainTileFlat {
-			w.TerrainTileRise[idx] = 1
-		}
-	}
-	if document.Terrain.StrictConnections {
-		if err := w.ValidateTerrainConnections(1.0 / 32.0); err != nil {
-			return err
-		}
-	}
 	return nil
 }
 
@@ -186,44 +124,10 @@ func parseTerrainInterpolation(value string) (TerrainInterpolation, error) {
 		return TerrainInterpolationLinear, nil
 	case "flat":
 		return TerrainInterpolationFlat, nil
-	case "smooth":
-		return TerrainInterpolationSmooth, nil
+	case "smooth", "monotonic":
+		return TerrainInterpolationMonotonic, nil
 	default:
 		return TerrainInterpolationLinear, fmt.Errorf("unknown terrain interpolation %q", value)
-	}
-}
-
-func parseTerrainTileShape(value string, rotation int) (TerrainTileShape, error) {
-	if rotation < 0 || rotation >= 360 || rotation%90 != 0 {
-		return TerrainTileAuto, fmt.Errorf("rotation must be 0, 90, 180, or 270, got %d", rotation)
-	}
-	switch value {
-	case "", "auto":
-		return TerrainTileAuto, nil
-	case "flat":
-		return TerrainTileFlat, nil
-	case "slope_north":
-		return TerrainTileSlopeNorth, nil
-	case "slope_south":
-		return TerrainTileSlopeSouth, nil
-	case "slope_east":
-		return TerrainTileSlopeEast, nil
-	case "slope_west":
-		return TerrainTileSlopeWest, nil
-	case "corner_slope":
-		return TerrainTileShape(int(TerrainTileCornerNorthEast) + rotation/90), nil
-	case "ridge":
-		if rotation%180 == 0 {
-			return TerrainTileRidgeNorthSouth, nil
-		}
-		return TerrainTileRidgeEastWest, nil
-	case "valley":
-		if rotation%180 == 0 {
-			return TerrainTileValleyNorthSouth, nil
-		}
-		return TerrainTileValleyEastWest, nil
-	default:
-		return TerrainTileAuto, fmt.Errorf("unknown terrain tile shape %q", value)
 	}
 }
 
@@ -234,96 +138,57 @@ func (w *World) heightAtBlocks(x, y float64) float64 {
 	y = math.Max(0, math.Min(maxY, y))
 	cellX := int(math.Floor(x))
 	cellY := int(math.Floor(y))
-	return w.heightInCell(cellX, cellY, x-float64(cellX), y-float64(cellY))
-}
+	fracX := x - float64(cellX)
+	fracY := y - float64(cellY)
 
-func (w *World) heightInCell(cellX, cellY int, fracX, fracY float64) float64 {
-	idx := cellY*w.canvasWidth + cellX
-	if idx >= 0 && idx < len(w.TerrainTileShapes) {
-		shape := TerrainTileShape(w.TerrainTileShapes[idx])
-		if shape != TerrainTileAuto {
-			base := float64(w.TerrainTileBase[idx])
-			rise := float64(w.TerrainTileRise[idx])
-			switch shape {
-			case TerrainTileFlat:
-				return base
-			case TerrainTileSlopeNorth:
-				return base + rise*(1-fracY)
-			case TerrainTileSlopeSouth:
-				return base + rise*fracY
-			case TerrainTileSlopeEast:
-				return base + rise*fracX
-			case TerrainTileSlopeWest:
-				return base + rise*(1-fracX)
-			case TerrainTileCornerNorthEast:
-				return base + rise*fracX*(1-fracY)
-			case TerrainTileCornerSouthEast:
-				return base + rise*fracX*fracY
-			case TerrainTileCornerSouthWest:
-				return base + rise*(1-fracX)*fracY
-			case TerrainTileCornerNorthWest:
-				return base + rise*(1-fracX)*(1-fracY)
-			case TerrainTileRidgeNorthSouth:
-				return base + rise*(1-math.Abs(fracX*2-1))
-			case TerrainTileRidgeEastWest:
-				return base + rise*(1-math.Abs(fracY*2-1))
-			case TerrainTileValleyNorthSouth:
-				return base + rise*math.Abs(fracX*2-1)
-			case TerrainTileValleyEastWest:
-				return base + rise*math.Abs(fracY*2-1)
-			}
-		}
-	}
-
-	heightSample := func(x, y int) float64 {
-		if x < 0 || y < 0 || x >= w.canvasWidth || y >= w.canvasHeight {
-			return 0
-		}
-		return float64(w.HeightMap[y*w.canvasWidth+x])
-	}
-	h00 := heightSample(cellX, cellY)
 	if w.TerrainInterpolation == TerrainInterpolationFlat {
-		return h00
+		return w.heightSample(cellX, cellY)
 	}
-	if w.TerrainInterpolation == TerrainInterpolationSmooth {
-		fracX = fracX * fracX * (3 - 2*fracX)
-		fracY = fracY * fracY * (3 - 2*fracY)
+	if w.TerrainInterpolation == TerrainInterpolationLinear {
+		h00 := w.heightSample(cellX, cellY)
+		h10 := w.heightSample(cellX+1, cellY)
+		h01 := w.heightSample(cellX, cellY+1)
+		h11 := w.heightSample(cellX+1, cellY+1)
+		top := h00 + (h10-h00)*fracX
+		bottom := h01 + (h11-h01)*fracX
+		return top + (bottom-top)*fracY
 	}
-	h10 := heightSample(cellX+1, cellY)
-	h01 := heightSample(cellX, cellY+1)
-	h11 := heightSample(cellX+1, cellY+1)
-	top := h00 + (h10-h00)*fracX
-	bottom := h01 + (h11-h01)*fracX
-	return top + (bottom-top)*fracY
+
+	var rows [4]float64
+	for row := -1; row <= 2; row++ {
+		rows[row+1] = monotonicCubic(
+			w.heightSample(cellX-1, cellY+row),
+			w.heightSample(cellX, cellY+row),
+			w.heightSample(cellX+1, cellY+row),
+			w.heightSample(cellX+2, cellY+row),
+			fracX,
+		)
+	}
+	return monotonicCubic(rows[0], rows[1], rows[2], rows[3], fracY)
 }
 
-func (w *World) ValidateTerrainConnections(tolerance float64) error {
-	const samples = 8
-	for y := 0; y < w.canvasHeight; y++ {
-		for x := 0; x < w.canvasWidth; x++ {
-			if x+1 < w.canvasWidth {
-				for i := 0; i <= samples; i++ {
-					t := float64(i) / samples
-					left := w.heightInCell(x, y, 1, t)
-					right := w.heightInCell(x+1, y, 0, t)
-					if math.Abs(left-right) > tolerance {
-						return fmt.Errorf("terrain seam between (%d,%d) and (%d,%d): %.3f vs %.3f", x, y, x+1, y, left, right)
-					}
-				}
-			}
-			if y+1 < w.canvasHeight {
-				for i := 0; i <= samples; i++ {
-					t := float64(i) / samples
-					top := w.heightInCell(x, y, t, 1)
-					bottom := w.heightInCell(x, y+1, t, 0)
-					if math.Abs(top-bottom) > tolerance {
-						return fmt.Errorf("terrain seam between (%d,%d) and (%d,%d): %.3f vs %.3f", x, y, x, y+1, top, bottom)
-					}
-				}
-			}
-		}
+func (w *World) heightSample(x, y int) float64 {
+	x = max(0, min(w.canvasWidth-1, x))
+	y = max(0, min(w.canvasHeight-1, y))
+	return float64(w.HeightMap[y*w.canvasWidth+x])
+}
+
+func monotonicCubic(p0, p1, p2, p3, t float64) float64 {
+	d0 := p1 - p0
+	d1 := p2 - p1
+	d2 := p3 - p2
+	m1 := monotonicSlope(d0, d1)
+	m2 := monotonicSlope(d1, d2)
+	t2 := t * t
+	t3 := t2 * t
+	return (2*t3-3*t2+1)*p1 + (t3-2*t2+t)*m1 + (-2*t3+3*t2)*p2 + (t3-t2)*m2
+}
+
+func monotonicSlope(before, after float64) float64 {
+	if before*after <= 0 {
+		return 0
 	}
-	return nil
+	return 2 * before * after / (before + after)
 }
 
 func (w *World) GetValue(x, y, z int) uint8 {

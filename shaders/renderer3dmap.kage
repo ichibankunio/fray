@@ -41,76 +41,50 @@ var HandTextureID float
 //imageSrc2: mapData layers
 //imageSrc3: mapData layers
 
-func TerrainTileData(cell vec2) vec3 {
-    data := imageSrc3UnsafeAt(imageSrc0Origin() + cell) * 255
-    return vec3(data.r / 4.0, (data.g - 128.0) / 32.0, data.b)
+func HeightSample(cell vec2) float {
+    safeCell := clamp(cell, vec2(0.0), WorldSize - vec2(1.0))
+    return (imageSrc3UnsafeAt(imageSrc0Origin() + safeCell) * 255.0).r
 }
 
-func HeightAtCell(cell vec2, pos vec2) float {
-    frac := pos - cell
-    tile := TerrainTileData(cell)
-    if tile.z > 0.5 {
-        if tile.z < 1.5 {
-            return tile.x
-        }
-        if tile.z < 2.5 {
-            return tile.x + tile.y * (1.0 - frac.y)
-        }
-        if tile.z < 3.5 {
-            return tile.x + tile.y * frac.y
-        }
-        if tile.z < 4.5 {
-            return tile.x + tile.y * frac.x
-        }
-        if tile.z < 5.5 {
-            return tile.x + tile.y * (1.0 - frac.x)
-        }
-        if tile.z < 6.5 {
-            return tile.x + tile.y * frac.x * (1.0 - frac.y)
-        }
-        if tile.z < 7.5 {
-            return tile.x + tile.y * frac.x * frac.y
-        }
-        if tile.z < 8.5 {
-            return tile.x + tile.y * (1.0 - frac.x) * frac.y
-        }
-        if tile.z < 9.5 {
-            return tile.x + tile.y * (1.0 - frac.x) * (1.0 - frac.y)
-        }
-        if tile.z < 10.5 {
-            return tile.x + tile.y * (1.0 - abs(frac.x * 2.0 - 1.0))
-        }
-        if tile.z < 11.5 {
-            return tile.x + tile.y * (1.0 - abs(frac.y * 2.0 - 1.0))
-        }
-        if tile.z < 12.5 {
-            return tile.x + tile.y * abs(frac.x * 2.0 - 1.0)
-        }
-        return tile.x + tile.y * abs(frac.y * 2.0 - 1.0)
+func MonotonicSlope(before float, after float) float {
+    if before * after <= 0.0 {
+        return 0.0
     }
-    return HeightAt(pos)
+    return 2.0 * before * after / (before + after)
+}
+
+func MonotonicCubic(p0 float, p1 float, p2 float, p3 float, t float) float {
+    d0 := p1 - p0
+    d1 := p2 - p1
+    d2 := p3 - p2
+    m1 := MonotonicSlope(d0, d1)
+    m2 := MonotonicSlope(d1, d2)
+    t2 := t * t
+    t3 := t2 * t
+    return (2.0*t3-3.0*t2+1.0)*p1 + (t3-2.0*t2+t)*m1 + (-2.0*t3+3.0*t2)*p2 + (t3-t2)*m2
 }
 
 func HeightAt(pos vec2) float {
     cell := floor(pos)
     frac := pos - cell
-    tile := TerrainTileData(cell)
-    if tile.z > 0.5 {
-        return HeightAtCell(cell, pos)
-    }
-    h00 := tile.x
-    h10 := TerrainTileData(cell + vec2(1.0, 0.0)).x
-    h01 := TerrainTileData(cell + vec2(0.0, 1.0)).x
-    h11 := TerrainTileData(cell + vec2(1.0, 1.0)).x
+    h00 := HeightSample(cell)
     if TerrainInterpolation < 0.5 {
         return h00
     }
-    if TerrainInterpolation > 1.5 {
-        frac = frac * frac * (vec2(3.0) - 2.0 * frac)
+    if TerrainInterpolation < 1.5 {
+        h10 := HeightSample(cell + vec2(1.0, 0.0))
+        h01 := HeightSample(cell + vec2(0.0, 1.0))
+        h11 := HeightSample(cell + vec2(1.0, 1.0))
+        top := h00 + (h10-h00)*frac.x
+        bottom := h01 + (h11-h01)*frac.x
+        return top + (bottom-top)*frac.y
     }
-    top := h00 + (h10 - h00) * frac.x
-    bottom := h01 + (h11 - h01) * frac.x
-    return top + (bottom - top) * frac.y
+
+    q0 := MonotonicCubic(HeightSample(cell+vec2(-1.0, -1.0)), HeightSample(cell+vec2(0.0, -1.0)), HeightSample(cell+vec2(1.0, -1.0)), HeightSample(cell+vec2(2.0, -1.0)), frac.x)
+    q1 := MonotonicCubic(HeightSample(cell+vec2(-1.0, 0.0)), HeightSample(cell), HeightSample(cell+vec2(1.0, 0.0)), HeightSample(cell+vec2(2.0, 0.0)), frac.x)
+    q2 := MonotonicCubic(HeightSample(cell+vec2(-1.0, 1.0)), HeightSample(cell+vec2(0.0, 1.0)), HeightSample(cell+vec2(1.0, 1.0)), HeightSample(cell+vec2(2.0, 1.0)), frac.x)
+    q3 := MonotonicCubic(HeightSample(cell+vec2(-1.0, 2.0)), HeightSample(cell+vec2(0.0, 2.0)), HeightSample(cell+vec2(1.0, 2.0)), HeightSample(cell+vec2(2.0, 2.0)), frac.x)
+    return MonotonicCubic(q0, q1, q2, q3, frac.y)
 }
 
 
