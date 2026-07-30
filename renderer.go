@@ -54,6 +54,7 @@ type Renderer struct {
 	pseudoShadowShader *ebiten.Shader
 	worldBuffer        *ebiten.Image
 	pseudoShadowConfig PseudoShadowConfig
+	terrainRenderScale float64
 
 	aimPos        vec3.Vec3
 	aimDirection  AimDirection
@@ -128,6 +129,7 @@ func (r *Renderer) Init(screenWidth, screenHeight float64, canvasWidth, canvasHe
 		panic(err)
 	}
 	r.pseudoShadowShader, _ = ebiten.NewShader(pseudoShadowShaderByte)
+	r.terrainRenderScale = 1
 	r.worldBuffer = ebiten.NewImage(int(r.screenWidth), int(r.screenHeight))
 
 	r.counter = 0
@@ -606,17 +608,20 @@ func (r *Renderer) syncLastSpriteParameters() {
 }
 
 func (r *Renderer) Draw(screen *ebiten.Image) {
-	if r.worldBuffer == nil || r.worldBuffer.Bounds().Dx() != int(r.screenWidth) || r.worldBuffer.Bounds().Dy() != int(r.screenHeight) {
-		r.worldBuffer = ebiten.NewImage(int(r.screenWidth), int(r.screenHeight))
+	renderWidth, renderHeight := r.terrainRenderSize()
+	if r.worldBuffer == nil || r.worldBuffer.Bounds().Dx() != renderWidth || r.worldBuffer.Bounds().Dy() != renderHeight {
+		r.worldBuffer = ebiten.NewImage(renderWidth, renderHeight)
 	}
 	r.worldBuffer.Clear()
 	r.renderWall(r.worldBuffer)
 	r.GetAimPositionFromScreen(r.worldBuffer)
 
-	if r.pseudoShadowConfig.Enabled && r.pseudoShadowShader != nil {
+	if r.pseudoShadowConfig.Enabled && r.pseudoShadowShader != nil && r.terrainRenderScale == 1 {
 		r.renderPseudoShadow(screen, r.worldBuffer)
 	} else {
-		screen.DrawImage(r.worldBuffer, nil)
+		op := &ebiten.DrawImageOptions{}
+		op.GeoM.Scale(r.screenWidth/float64(renderWidth), r.screenHeight/float64(renderHeight))
+		screen.DrawImage(r.worldBuffer, op)
 	}
 
 	// r.renderWithNoTextures(screen)
@@ -638,22 +643,39 @@ func (r *Renderer) Draw(screen *ebiten.Image) {
 	}
 }
 
+// SetTerrainRenderScale lowers only the 3D world resolution. UI is still
+// rendered at the original screen resolution.
+func (r *Renderer) SetTerrainRenderScale(scale float64) {
+	r.terrainRenderScale = max(0.25, min(1, scale))
+	r.worldBuffer = nil
+}
+
+func (r *Renderer) terrainRenderSize() (int, int) {
+	scale := r.terrainRenderScale
+	if scale <= 0 {
+		scale = 1
+	}
+	return max(1, int(r.screenWidth*scale)), max(1, int(r.screenHeight*scale))
+}
+
 func (r *Renderer) DrawTopView(screen *ebiten.Image) {
 	r.Wld.DrawTopView(screen)
 }
 
 func (r *Renderer) renderWall(screen *ebiten.Image) {
+	renderWidth, renderHeight := r.terrainRenderSize()
+	renderScale := float32(float64(renderHeight) / r.screenHeight)
 	occlusionTargetPos := r.Cam.GetCollisionAnchorPos()
 	op := &ebiten.DrawRectShaderOptions{}
 	op.Uniforms = map[string]interface{}{
-		"ScreenSize": []float32{float32(r.screenWidth), float32(r.screenHeight)},
+		"ScreenSize": []float32{float32(renderWidth), float32(renderHeight)},
 		"Pos":        []float32{float32(r.Cam.pos.X / float64(r.texSize)), float32(r.Cam.pos.Y / float64(r.texSize))},
 		"Dir":        []float32{float32(r.Cam.dir.X), float32(r.Cam.dir.Y)},
 		"Plane":      []float32{float32(r.Cam.plane.X), float32(r.Cam.plane.Y)},
 		"POVScale":   r.POVScale,
 
 		"PosZ":               float32(r.Cam.pos.Z / float64(r.texSize)),
-		"Pitch":              r.Cam.pitch,
+		"Pitch":              r.Cam.pitch * renderScale,
 		"SpriteNum":          len(r.Wld.Sprites),
 		"SpriteParameterNum": r.SpriteParameterNum,
 
@@ -681,7 +703,7 @@ func (r *Renderer) renderWall(screen *ebiten.Image) {
 	op.Images[1] = r.Textures[1].Src //floor(texture)
 	op.Images[2] = r.Textures[2].Src //sprite(data)
 	op.Images[3] = r.Textures[3].Src //map(data)
-	screen.DrawRectShader(int(r.screenWidth), int(r.screenHeight), r.shader, op)
+	screen.DrawRectShader(renderWidth, renderHeight, r.shader, op)
 }
 
 func (r *Renderer) renderPseudoShadow(screen, src *ebiten.Image) {
