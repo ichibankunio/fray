@@ -87,6 +87,10 @@ func HeightAt(pos vec2) float {
     return MonotonicCubic(q0, q1, q2, q3, frac.y)
 }
 
+func HeightAtCell(cell vec2, pos vec2) float {
+    return HeightAt(pos)
+}
+
 
 // func Fragment(position vec4, texCoord vec2, color vec4) vec4 {
 func Fragment(dstPos vec4, srcPos vec2, color vec4) vec4 {
