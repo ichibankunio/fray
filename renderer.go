@@ -699,11 +699,16 @@ func (r *Renderer) renderWall(screen *ebiten.Image) {
 		op.Uniforms["OccludingWallFade"] = float32(1)
 	}
 
-	op.Images[0] = r.Textures[0].Src //wall(texture), sprite(texture)
-	op.Images[1] = r.Textures[1].Src //floor(texture)
-	op.Images[2] = r.Textures[2].Src //sprite(data)
-	op.Images[3] = r.Textures[3].Src //map(data)
+	op.Images[0] = shaderSourceView(r.Textures[0].Src, renderWidth, renderHeight) //wall(texture), sprite(texture)
+	op.Images[1] = shaderSourceView(r.Textures[1].Src, renderWidth, renderHeight) //floor(texture)
+	op.Images[2] = shaderSourceView(r.Textures[2].Src, renderWidth, renderHeight) //sprite(data)
+	op.Images[3] = shaderSourceView(r.Textures[3].Src, renderWidth, renderHeight) //map(data)
 	screen.DrawRectShader(renderWidth, renderHeight, r.shader, op)
+}
+
+func shaderSourceView(src *ebiten.Image, width, height int) *ebiten.Image {
+	bounds := src.Bounds()
+	return src.SubImage(image.Rect(bounds.Min.X, bounds.Min.Y, bounds.Min.X+width, bounds.Min.Y+height)).(*ebiten.Image)
 }
 
 func (r *Renderer) renderPseudoShadow(screen, src *ebiten.Image) {
