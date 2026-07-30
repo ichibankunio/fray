@@ -59,6 +59,31 @@ func TestMonotonicCubicPreservesLinearGradient(t *testing.T) {
 	}
 }
 
+func TestMonotonicTerrainHasContinuousCellBoundaries(t *testing.T) {
+	w := &World{
+		HeightMap: []uint8{
+			0, 0, 1, 2, 2,
+			0, 1, 2, 3, 3,
+			1, 2, 3, 3, 4,
+			1, 2, 2, 3, 4,
+		},
+		TerrainInterpolation: TerrainInterpolationMonotonic,
+		canvasWidth:          5,
+		canvasHeight:         4,
+	}
+	const epsilon = 1e-5
+	left := w.heightAtBlocks(2-epsilon, 1.4)
+	right := w.heightAtBlocks(2+epsilon, 1.4)
+	if math.Abs(left-right) > 1e-3 {
+		t.Fatalf("height jumps at cell boundary: left=%v right=%v", left, right)
+	}
+	leftSlope := (w.heightAtBlocks(2, 1.4) - w.heightAtBlocks(2-epsilon, 1.4)) / epsilon
+	rightSlope := (w.heightAtBlocks(2+epsilon, 1.4) - w.heightAtBlocks(2, 1.4)) / epsilon
+	if math.Abs(leftSlope-rightSlope) > 1e-3 {
+		t.Fatalf("slope jumps at cell boundary: left=%v right=%v", leftSlope, rightSlope)
+	}
+}
+
 func TestLoadTerrainJSONMonotonic(t *testing.T) {
 	w := &World{}
 	w.Init(64, 64, 2, 2, 2)
