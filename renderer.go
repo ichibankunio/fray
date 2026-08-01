@@ -38,6 +38,7 @@ type PseudoShadowConfig struct {
 // TerrainRaymarchConfig controls distance and surface-aware terrain ray steps.
 // Distances and step sizes are expressed in world grid blocks.
 type TerrainRaymarchConfig struct {
+	Adaptive      bool
 	NearStep      float32
 	MidStep       float32
 	FarStep       float32
@@ -50,6 +51,7 @@ type TerrainRaymarchConfig struct {
 
 func DefaultTerrainRaymarchConfig() TerrainRaymarchConfig {
 	return TerrainRaymarchConfig{
+		Adaptive:      true,
 		NearStep:      0.025,
 		MidStep:       0.10,
 		FarStep:       0.25,
@@ -755,7 +757,11 @@ func (r *Renderer) renderWall(screen *ebiten.Image) {
 		"TerrainMaxDistance":    r.terrainRaymarchConfig.MaxDistance,
 		"TerrainSurfaceBand":    r.terrainRaymarchConfig.SurfaceBand,
 		"TerrainFlatStepBoost":  r.terrainRaymarchConfig.FlatStepBoost,
+		"TerrainAdaptive":       float32(0),
 		"AimHighlightEnabled":   float32(0),
+	}
+	if r.terrainRaymarchConfig.Adaptive {
+		op.Uniforms["TerrainAdaptive"] = float32(1)
 	}
 	if r.AimHighlightEnabled {
 		op.Uniforms["AimHighlightEnabled"] = float32(1)
