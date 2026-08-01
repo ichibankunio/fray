@@ -109,6 +109,26 @@ func TestLoadTerrainJSONMonotonic(t *testing.T) {
 	}
 }
 
+func TestLoadTerrainJSONWaterLevel(t *testing.T) {
+	w := &World{}
+	w.Init(64, 64, 1, 1, 8)
+	err := w.LoadTerrainJSON([]byte(`{"version":3,"canvasWidth":1,"canvasHeight":1,"canvasDepth":8,"terrain":{"interpolation":"monotonic","waterLevel":2.5},"layers":[[1]]}`))
+	if err != nil {
+		t.Fatalf("LoadTerrainJSON: %v", err)
+	}
+	if !w.HasWater || w.WaterLevel != 2.5 {
+		t.Fatalf("water = %v at %v", w.HasWater, w.WaterLevel)
+	}
+}
+
+func TestLoadTerrainJSONRejectsWaterOutsideWorld(t *testing.T) {
+	w := &World{}
+	w.Init(64, 64, 1, 1, 4)
+	if err := w.LoadTerrainJSON([]byte(`{"version":3,"terrain":{"waterLevel":5},"layers":[[1]]}`)); err == nil {
+		t.Fatal("LoadTerrainJSON accepted water above world")
+	}
+}
+
 func TestLoadTerrainJSONRejectsRemovedTileSchema(t *testing.T) {
 	w := &World{}
 	w.Init(64, 64, 1, 1, 1)

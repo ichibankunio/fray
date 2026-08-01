@@ -22,7 +22,8 @@ const (
 )
 
 type terrainJSONOptions struct {
-	Interpolation string `json:"interpolation"`
+	Interpolation string   `json:"interpolation"`
+	WaterLevel    *float64 `json:"waterLevel,omitempty"`
 }
 
 type terrainJSONDocument struct {
@@ -45,6 +46,8 @@ type World struct {
 	TerrainVisibility []float32
 
 	TerrainInterpolation TerrainInterpolation
+	WaterLevel           float64
+	HasWater             bool
 
 	screenWidth  int
 	screenHeight int
@@ -78,6 +81,7 @@ func (w *World) Init(screenWidth int, screenHeight int, canvasWidth int, canvasH
 	w.screenHeight = screenHeight
 	w.screenWidth = screenWidth
 	w.TerrainInterpolation = TerrainInterpolationLinear
+	w.HasWater = false
 }
 
 func (w *World) LoadTerrainJSON(data []byte) error {
@@ -108,6 +112,13 @@ func (w *World) LoadTerrainJSON(data []byte) error {
 		return err
 	}
 	w.TerrainInterpolation = interpolation
+	w.HasWater = document.Terrain.WaterLevel != nil
+	if w.HasWater {
+		if *document.Terrain.WaterLevel < 0 || *document.Terrain.WaterLevel > float64(w.canvasDepth) {
+			return fmt.Errorf("terrain water level %.2f is outside world depth 0..%d", *document.Terrain.WaterLevel, w.canvasDepth)
+		}
+		w.WaterLevel = *document.Terrain.WaterLevel
+	}
 
 	for z := range w.WorldMap {
 		clear(w.WorldMap[z])

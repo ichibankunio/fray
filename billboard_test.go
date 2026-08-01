@@ -3,12 +3,36 @@ package fray
 import (
 	"image/color"
 	"testing"
+
+	"github.com/hajimehoshi/ebiten/v2"
 )
 
 func TestNormalizedBillboardConfigRestoresInvalidValues(t *testing.T) {
 	got := normalizedBillboardConfig(BillboardConfig{NearDistance: -1, FarDistance: -2})
 	if got.NearDistance != 0 || got.FarDistance <= got.NearDistance || got.ProjectionScale <= 0 {
 		t.Fatalf("invalid normalized config: %+v", got)
+	}
+}
+
+func TestClipBillboardTriangleClipsHiddenBottom(t *testing.T) {
+	got := clipBillboardTriangle([3]ebiten.Vertex{{DstX: 0, DstY: 0}, {DstX: 2, DstY: 2}, {DstX: 0, DstY: 2}}, 1)
+	if len(got) != 3 {
+		t.Fatalf("vertices = %d, want 3", len(got))
+	}
+	for _, vertex := range got {
+		if vertex.DstY > 1 {
+			t.Fatalf("unclipped vertex: %+v", vertex)
+		}
+	}
+}
+
+func TestBillboardPixelHeightShrinksWithDistance(t *testing.T) {
+	config := DefaultBillboardConfig()
+	config.MinPixelHeight = .5
+	near := billboardPixelHeight(1, 2, 960, config)
+	far := billboardPixelHeight(1, 12, 960, config)
+	if far >= near || far != 80 {
+		t.Fatalf("near=%v far=%v, want distance scaling", near, far)
 	}
 }
 

@@ -74,6 +74,23 @@ type TerrainAtmosphereConfig struct {
 	SunGlow       float32
 }
 
+// TerrainWaterConfig controls the appearance of the optional water plane.
+// Its height is defined only by terrain.waterLevel in the terrain JSON.
+type TerrainWaterConfig struct {
+	DeepColor    [3]float32
+	ShallowColor [3]float32
+	Reflection   float32
+	ShoreWidth   float32
+	WaveStrength float32
+}
+
+func DefaultTerrainWaterConfig() TerrainWaterConfig {
+	return TerrainWaterConfig{
+		DeepColor: [3]float32{0.04, 0.18, 0.38}, ShallowColor: [3]float32{0.12, 0.42, 0.62},
+		Reflection: .42, ShoreWidth: .42, WaveStrength: .08,
+	}
+}
+
 func DefaultTerrainAtmosphereConfig() TerrainAtmosphereConfig {
 	return TerrainAtmosphereConfig{
 		ZenithColor:   [3]float32{0.34, 0.64, 0.84},
@@ -108,6 +125,7 @@ type Renderer struct {
 	terrainRenderScale      float64
 	terrainRaymarchConfig   TerrainRaymarchConfig
 	terrainAtmosphereConfig TerrainAtmosphereConfig
+	terrainWaterConfig      TerrainWaterConfig
 
 	aimPos        vec3.Vec3
 	aimDirection  AimDirection
@@ -185,6 +203,7 @@ func (r *Renderer) Init(screenWidth, screenHeight float64, canvasWidth, canvasHe
 	r.terrainRenderScale = 1
 	r.terrainRaymarchConfig = DefaultTerrainRaymarchConfig()
 	r.terrainAtmosphereConfig = DefaultTerrainAtmosphereConfig()
+	r.terrainWaterConfig = DefaultTerrainWaterConfig()
 	r.worldBuffer = ebiten.NewImage(int(r.screenWidth), int(r.screenHeight))
 
 	r.counter = 0
@@ -743,6 +762,13 @@ func (r *Renderer) SetTerrainAtmosphereConfig(config TerrainAtmosphereConfig) {
 	r.terrainAtmosphereConfig = config
 }
 
+func (r *Renderer) SetTerrainWaterConfig(config TerrainWaterConfig) {
+	config.Reflection = max(0, min(1, config.Reflection))
+	config.ShoreWidth = max(.01, config.ShoreWidth)
+	config.WaveStrength = max(0, min(.25, config.WaveStrength))
+	r.terrainWaterConfig = config
+}
+
 func (r *Renderer) terrainRenderSize() (int, int) {
 	scale := r.terrainRenderScale
 	if scale <= 0 {
@@ -772,37 +798,47 @@ func (r *Renderer) renderWall(screen *ebiten.Image) {
 		"SpriteNum":          len(r.Wld.Sprites),
 		"SpriteParameterNum": r.SpriteParameterNum,
 
-		"AimPos":                []float32{float32(r.aimPos.X), float32(r.aimPos.Y), float32(r.aimPos.Z)},
-		"HandTextureID":         float32(r.HandTextureID),
-		"TexSize":               float32(r.texSize),
-		"WorldSize":             []float32{float32(r.Wld.canvasWidth), float32(r.Wld.canvasHeight)},
-		"OcclusionTargetPos":    []float32{float32(occlusionTargetPos.X / float64(r.texSize)), float32(occlusionTargetPos.Y / float64(r.texSize)), float32(occlusionTargetPos.Z / float64(r.texSize))},
-		"OccludingWallFade":     float32(0),
-		"CeilingHeight":         r.CeilingHeight,
-		"CeilingTextureID":      r.CeilingTextureID,
-		"DefaultFloorTextureID": r.DefaultFloorTextureID,
-		"DefaultFloorColor":     []float32{r.DefaultFloorColor[0], r.DefaultFloorColor[1], r.DefaultFloorColor[2]},
-		"TerrainInterpolation":  float32(r.Wld.TerrainInterpolation),
-		"TerrainNearStep":       r.terrainRaymarchConfig.NearStep,
-		"TerrainMidStep":        r.terrainRaymarchConfig.MidStep,
-		"TerrainFarStep":        r.terrainRaymarchConfig.FarStep,
-		"TerrainMidDistance":    r.terrainRaymarchConfig.MidDistance,
-		"TerrainFarDistance":    r.terrainRaymarchConfig.FarDistance,
-		"TerrainMaxDistance":    r.terrainRaymarchConfig.MaxDistance,
-		"TerrainSurfaceBand":    r.terrainRaymarchConfig.SurfaceBand,
-		"TerrainFlatStepBoost":  r.terrainRaymarchConfig.FlatStepBoost,
-		"TerrainAdaptive":       float32(0),
-		"TerrainZenithColor":    []float32{r.terrainAtmosphereConfig.ZenithColor[0], r.terrainAtmosphereConfig.ZenithColor[1], r.terrainAtmosphereConfig.ZenithColor[2]},
-		"TerrainHorizonColor":   []float32{r.terrainAtmosphereConfig.HorizonColor[0], r.terrainAtmosphereConfig.HorizonColor[1], r.terrainAtmosphereConfig.HorizonColor[2]},
-		"TerrainFogColor":       []float32{r.terrainAtmosphereConfig.FogColor[0], r.terrainAtmosphereConfig.FogColor[1], r.terrainAtmosphereConfig.FogColor[2]},
-		"TerrainDistanceFog":    r.terrainAtmosphereConfig.DistanceFog,
-		"TerrainHeightFog":      r.terrainAtmosphereConfig.HeightFog,
-		"TerrainFogBaseHeight":  r.terrainAtmosphereConfig.FogBaseHeight,
-		"TerrainSunGlow":        r.terrainAtmosphereConfig.SunGlow,
-		"AimHighlightEnabled":   float32(0),
+		"AimPos":                   []float32{float32(r.aimPos.X), float32(r.aimPos.Y), float32(r.aimPos.Z)},
+		"HandTextureID":            float32(r.HandTextureID),
+		"TexSize":                  float32(r.texSize),
+		"WorldSize":                []float32{float32(r.Wld.canvasWidth), float32(r.Wld.canvasHeight)},
+		"OcclusionTargetPos":       []float32{float32(occlusionTargetPos.X / float64(r.texSize)), float32(occlusionTargetPos.Y / float64(r.texSize)), float32(occlusionTargetPos.Z / float64(r.texSize))},
+		"OccludingWallFade":        float32(0),
+		"CeilingHeight":            r.CeilingHeight,
+		"CeilingTextureID":         r.CeilingTextureID,
+		"DefaultFloorTextureID":    r.DefaultFloorTextureID,
+		"DefaultFloorColor":        []float32{r.DefaultFloorColor[0], r.DefaultFloorColor[1], r.DefaultFloorColor[2]},
+		"TerrainInterpolation":     float32(r.Wld.TerrainInterpolation),
+		"TerrainNearStep":          r.terrainRaymarchConfig.NearStep,
+		"TerrainMidStep":           r.terrainRaymarchConfig.MidStep,
+		"TerrainFarStep":           r.terrainRaymarchConfig.FarStep,
+		"TerrainMidDistance":       r.terrainRaymarchConfig.MidDistance,
+		"TerrainFarDistance":       r.terrainRaymarchConfig.FarDistance,
+		"TerrainMaxDistance":       r.terrainRaymarchConfig.MaxDistance,
+		"TerrainSurfaceBand":       r.terrainRaymarchConfig.SurfaceBand,
+		"TerrainFlatStepBoost":     r.terrainRaymarchConfig.FlatStepBoost,
+		"TerrainAdaptive":          float32(0),
+		"TerrainZenithColor":       []float32{r.terrainAtmosphereConfig.ZenithColor[0], r.terrainAtmosphereConfig.ZenithColor[1], r.terrainAtmosphereConfig.ZenithColor[2]},
+		"TerrainHorizonColor":      []float32{r.terrainAtmosphereConfig.HorizonColor[0], r.terrainAtmosphereConfig.HorizonColor[1], r.terrainAtmosphereConfig.HorizonColor[2]},
+		"TerrainFogColor":          []float32{r.terrainAtmosphereConfig.FogColor[0], r.terrainAtmosphereConfig.FogColor[1], r.terrainAtmosphereConfig.FogColor[2]},
+		"TerrainDistanceFog":       r.terrainAtmosphereConfig.DistanceFog,
+		"TerrainHeightFog":         r.terrainAtmosphereConfig.HeightFog,
+		"TerrainFogBaseHeight":     r.terrainAtmosphereConfig.FogBaseHeight,
+		"TerrainSunGlow":           r.terrainAtmosphereConfig.SunGlow,
+		"TerrainWaterEnabled":      float32(0),
+		"TerrainWaterLevel":        float32(r.Wld.WaterLevel),
+		"TerrainWaterDeepColor":    []float32{r.terrainWaterConfig.DeepColor[0], r.terrainWaterConfig.DeepColor[1], r.terrainWaterConfig.DeepColor[2]},
+		"TerrainWaterShallowColor": []float32{r.terrainWaterConfig.ShallowColor[0], r.terrainWaterConfig.ShallowColor[1], r.terrainWaterConfig.ShallowColor[2]},
+		"TerrainWaterReflection":   r.terrainWaterConfig.Reflection,
+		"TerrainWaterShoreWidth":   r.terrainWaterConfig.ShoreWidth,
+		"TerrainWaterWaveStrength": r.terrainWaterConfig.WaveStrength,
+		"AimHighlightEnabled":      float32(0),
 	}
 	if r.terrainRaymarchConfig.Adaptive {
 		op.Uniforms["TerrainAdaptive"] = float32(1)
+	}
+	if r.Wld.HasWater {
+		op.Uniforms["TerrainWaterEnabled"] = float32(1)
 	}
 	if r.AimHighlightEnabled {
 		op.Uniforms["AimHighlightEnabled"] = float32(1)

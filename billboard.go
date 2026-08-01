@@ -2,6 +2,7 @@ package fray
 
 import (
 	"image/color"
+	"math"
 	"sort"
 
 	"github.com/hajimehoshi/ebiten/v2"
@@ -29,21 +30,22 @@ type BillboardInstance struct {
 }
 
 type BillboardConfig struct {
-	NearDistance     float64
-	FarDistance      float64
-	ProjectionScale  float64
-	ScreenMargin     float32
-	MinPixelHeight   float32
-	MaxPixelHeight   float32
-	TerrainOcclusion bool
-	Occlusion        TerrainOcclusionConfig
+	NearDistance          float64
+	FarDistance           float64
+	ProjectionScale       float64
+	ScreenMargin          float32
+	MinPixelHeight        float32
+	MaxPixelHeight        float32
+	TerrainOcclusion      bool
+	Occlusion             TerrainOcclusionConfig
+	OcclusionWidthSamples int
 }
 
 func DefaultBillboardConfig() BillboardConfig {
 	return BillboardConfig{
 		NearDistance: 1, FarDistance: 14, ProjectionScale: .48,
-		ScreenMargin: 80, MinPixelHeight: 1, MaxPixelHeight: 4096,
-		TerrainOcclusion: true, Occlusion: DefaultTerrainOcclusionConfig(),
+		ScreenMargin: 80, MinPixelHeight: .5, MaxPixelHeight: 4096,
+		TerrainOcclusion: true, Occlusion: DefaultTerrainOcclusionConfig(), OcclusionWidthSamples: 3,
 	}
 }
 
@@ -65,6 +67,7 @@ func (r *Renderer) DrawBillboardInstances(dst, texture *ebiten.Image, mesh Billb
 	direction := r.Cam.GetDir()
 	right := vec2.New(-direction.Y, direction.X)
 	projected := make([]projectedBillboard, 0, len(instances))
+	meshHalfWidth := billboardMeshHalfWidth(mesh)
 	for _, instance := range instances {
 		if instance.Height <= 0 {
 			continue
@@ -86,7 +89,17 @@ func (r *Renderer) DrawBillboardInstances(dst, texture *ebiten.Image, mesh Billb
 		}
 		clipY := baseY
 		if config.TerrainOcclusion {
-			visibleHeight := r.Wld.TerrainVisibleHeight(position.X, position.Y, position.Z, instance.Position.X, instance.Position.Y, config.Occlusion)
+			visibleHeight := math.Inf(-1)
+			samples := max(1, config.OcclusionWidthSamples)
+			for sample := 0; sample < samples; sample++ {
+				offset := 0.0
+				if samples > 1 {
+					offset = (float64(sample)/float64(samples-1)*2 - 1) * meshHalfWidth * instance.Height
+				}
+				targetX := instance.Position.X + right.X*offset
+				targetY := instance.Position.Y + right.Y*offset
+				visibleHeight = max(visibleHeight, r.Wld.TerrainVisibleHeight(position.X, position.Y, position.Z, targetX, targetY, config.Occlusion))
+			}
 			if visibleHeight >= instance.Position.Z+instance.Height {
 				continue
 			}
@@ -120,7 +133,16 @@ func normalizedBillboardConfig(config BillboardConfig) BillboardConfig {
 	if config.Occlusion.SampleSpacing <= 0 {
 		config.Occlusion = defaults.Occlusion
 	}
+	config.OcclusionWidthSamples = max(1, min(5, config.OcclusionWidthSamples))
 	return config
+}
+
+func billboardMeshHalfWidth(mesh BillboardMesh) float64 {
+	width := float64(0)
+	for _, vertex := range mesh.Vertices {
+		width = max(width, math.Abs(float64(vertex.X)))
+	}
+	return width
 }
 
 func (r *Renderer) drawProjectedBillboards(dst, texture *ebiten.Image, mesh BillboardMesh, projected []projectedBillboard, config BillboardConfig) {
@@ -136,26 +158,69 @@ func (r *Renderer) drawProjectedBillboards(dst, texture *ebiten.Image, mesh Bill
 		if len(vertices)+len(mesh.Vertices) > 65535 {
 			flush()
 		}
-		pixelHeight := float32(item.instance.Height / item.depth * r.screenHeight)
-		pixelHeight = max(config.MinPixelHeight, min(config.MaxPixelHeight, pixelHeight))
-		base := uint16(len(vertices))
+		pixelHeight := billboardPixelHeight(item.instance.Height, item.depth, r.screenHeight, config)
 		tint := item.instance.Tint
 		if tint == (color.RGBA{}) {
 			tint = color.RGBA{255, 255, 255, 255}
 		}
-		for _, vertex := range mesh.Vertices {
+		instanceVertices := make([]ebiten.Vertex, len(mesh.Vertices))
+		for index, vertex := range mesh.Vertices {
 			clr := multiplyBillboardColor(vertex.Color, tint)
-			vertices = append(vertices, ebiten.Vertex{
-				DstX: item.x + vertex.X*pixelHeight, DstY: min(item.baseY-vertex.Y*pixelHeight, item.clipY),
+			instanceVertices[index] = ebiten.Vertex{
+				DstX: item.x + vertex.X*pixelHeight, DstY: item.baseY - vertex.Y*pixelHeight,
 				SrcX: vertex.SrcX, SrcY: vertex.SrcY,
 				ColorR: float32(clr.R) / 255, ColorG: float32(clr.G) / 255, ColorB: float32(clr.B) / 255, ColorA: float32(clr.A) / 255,
-			})
+			}
 		}
-		for _, index := range mesh.Indices {
-			indices = append(indices, base+index)
+		for triangle := 0; triangle+2 < len(mesh.Indices); triangle += 3 {
+			a, b, c := mesh.Indices[triangle], mesh.Indices[triangle+1], mesh.Indices[triangle+2]
+			if int(a) >= len(instanceVertices) || int(b) >= len(instanceVertices) || int(c) >= len(instanceVertices) {
+				continue
+			}
+			polygon := clipBillboardTriangle([3]ebiten.Vertex{instanceVertices[a], instanceVertices[b], instanceVertices[c]}, item.clipY)
+			if len(vertices)+len(polygon) > 65535 {
+				flush()
+			}
+			base := uint16(len(vertices))
+			vertices = append(vertices, polygon...)
+			for index := 1; index+1 < len(polygon); index++ {
+				indices = append(indices, base, base+uint16(index), base+uint16(index+1))
+			}
 		}
 	}
 	flush()
+}
+
+func billboardPixelHeight(height, depth, screenHeight float64, config BillboardConfig) float32 {
+	projected := float32(height / max(.001, depth) * screenHeight)
+	return max(config.MinPixelHeight, min(config.MaxPixelHeight, projected))
+}
+
+func clipBillboardTriangle(triangle [3]ebiten.Vertex, clipY float32) []ebiten.Vertex {
+	result := make([]ebiten.Vertex, 0, 4)
+	previous := triangle[2]
+	previousInside := previous.DstY <= clipY
+	for _, current := range triangle {
+		currentInside := current.DstY <= clipY
+		if currentInside != previousInside {
+			t := (clipY - previous.DstY) / (current.DstY - previous.DstY)
+			result = append(result, interpolateBillboardVertex(previous, current, t))
+		}
+		if currentInside {
+			result = append(result, current)
+		}
+		previous, previousInside = current, currentInside
+	}
+	return result
+}
+
+func interpolateBillboardVertex(a, b ebiten.Vertex, t float32) ebiten.Vertex {
+	return ebiten.Vertex{
+		DstX: a.DstX + (b.DstX-a.DstX)*t, DstY: a.DstY + (b.DstY-a.DstY)*t,
+		SrcX: a.SrcX + (b.SrcX-a.SrcX)*t, SrcY: a.SrcY + (b.SrcY-a.SrcY)*t,
+		ColorR: a.ColorR + (b.ColorR-a.ColorR)*t, ColorG: a.ColorG + (b.ColorG-a.ColorG)*t,
+		ColorB: a.ColorB + (b.ColorB-a.ColorB)*t, ColorA: a.ColorA + (b.ColorA-a.ColorA)*t,
+	}
 }
 
 func multiplyBillboardColor(a, b color.RGBA) color.RGBA {
