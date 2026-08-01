@@ -63,6 +63,29 @@ func DefaultTerrainRaymarchConfig() TerrainRaymarchConfig {
 	}
 }
 
+// TerrainAtmosphereConfig controls shader-side sky and height-aware fog.
+type TerrainAtmosphereConfig struct {
+	ZenithColor   [3]float32
+	HorizonColor  [3]float32
+	FogColor      [3]float32
+	DistanceFog   float32
+	HeightFog     float32
+	FogBaseHeight float32
+	SunGlow       float32
+}
+
+func DefaultTerrainAtmosphereConfig() TerrainAtmosphereConfig {
+	return TerrainAtmosphereConfig{
+		ZenithColor:   [3]float32{0.34, 0.64, 0.84},
+		HorizonColor:  [3]float32{0.72, 0.88, 0.93},
+		FogColor:      [3]float32{0.63, 0.85, 0.94},
+		DistanceFog:   1.0 / 58.0,
+		HeightFog:     0.018,
+		FogBaseHeight: 9,
+		SunGlow:       0.18,
+	}
+}
+
 type Renderer struct {
 	Cam *Camera
 	Stk *Stick
@@ -79,11 +102,12 @@ type Renderer struct {
 
 	Textures [4]*ImageSrc
 
-	pseudoShadowShader    *ebiten.Shader
-	worldBuffer           *ebiten.Image
-	pseudoShadowConfig    PseudoShadowConfig
-	terrainRenderScale    float64
-	terrainRaymarchConfig TerrainRaymarchConfig
+	pseudoShadowShader      *ebiten.Shader
+	worldBuffer             *ebiten.Image
+	pseudoShadowConfig      PseudoShadowConfig
+	terrainRenderScale      float64
+	terrainRaymarchConfig   TerrainRaymarchConfig
+	terrainAtmosphereConfig TerrainAtmosphereConfig
 
 	aimPos        vec3.Vec3
 	aimDirection  AimDirection
@@ -160,6 +184,7 @@ func (r *Renderer) Init(screenWidth, screenHeight float64, canvasWidth, canvasHe
 	r.pseudoShadowShader, _ = ebiten.NewShader(pseudoShadowShaderByte)
 	r.terrainRenderScale = 1
 	r.terrainRaymarchConfig = DefaultTerrainRaymarchConfig()
+	r.terrainAtmosphereConfig = DefaultTerrainAtmosphereConfig()
 	r.worldBuffer = ebiten.NewImage(int(r.screenWidth), int(r.screenHeight))
 
 	r.counter = 0
@@ -709,6 +734,15 @@ func (r *Renderer) SetTerrainRaymarchConfig(config TerrainRaymarchConfig) {
 	r.terrainRaymarchConfig = config
 }
 
+// SetTerrainAtmosphereConfig configures atmospheric rendering independently
+// from the terrain JSON and height interpolation.
+func (r *Renderer) SetTerrainAtmosphereConfig(config TerrainAtmosphereConfig) {
+	config.DistanceFog = max(0, config.DistanceFog)
+	config.HeightFog = max(0, config.HeightFog)
+	config.SunGlow = max(0, min(1, config.SunGlow))
+	r.terrainAtmosphereConfig = config
+}
+
 func (r *Renderer) terrainRenderSize() (int, int) {
 	scale := r.terrainRenderScale
 	if scale <= 0 {
@@ -758,6 +792,13 @@ func (r *Renderer) renderWall(screen *ebiten.Image) {
 		"TerrainSurfaceBand":    r.terrainRaymarchConfig.SurfaceBand,
 		"TerrainFlatStepBoost":  r.terrainRaymarchConfig.FlatStepBoost,
 		"TerrainAdaptive":       float32(0),
+		"TerrainZenithColor":    []float32{r.terrainAtmosphereConfig.ZenithColor[0], r.terrainAtmosphereConfig.ZenithColor[1], r.terrainAtmosphereConfig.ZenithColor[2]},
+		"TerrainHorizonColor":   []float32{r.terrainAtmosphereConfig.HorizonColor[0], r.terrainAtmosphereConfig.HorizonColor[1], r.terrainAtmosphereConfig.HorizonColor[2]},
+		"TerrainFogColor":       []float32{r.terrainAtmosphereConfig.FogColor[0], r.terrainAtmosphereConfig.FogColor[1], r.terrainAtmosphereConfig.FogColor[2]},
+		"TerrainDistanceFog":    r.terrainAtmosphereConfig.DistanceFog,
+		"TerrainHeightFog":      r.terrainAtmosphereConfig.HeightFog,
+		"TerrainFogBaseHeight":  r.terrainAtmosphereConfig.FogBaseHeight,
+		"TerrainSunGlow":        r.terrainAtmosphereConfig.SunGlow,
 		"AimHighlightEnabled":   float32(0),
 	}
 	if r.terrainRaymarchConfig.Adaptive {
