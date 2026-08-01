@@ -35,6 +35,32 @@ type PseudoShadowConfig struct {
 	TintStrength     float32
 }
 
+// TerrainRaymarchConfig controls distance and surface-aware terrain ray steps.
+// Distances and step sizes are expressed in world grid blocks.
+type TerrainRaymarchConfig struct {
+	NearStep      float32
+	MidStep       float32
+	FarStep       float32
+	MidDistance   float32
+	FarDistance   float32
+	MaxDistance   float32
+	SurfaceBand   float32
+	FlatStepBoost float32
+}
+
+func DefaultTerrainRaymarchConfig() TerrainRaymarchConfig {
+	return TerrainRaymarchConfig{
+		NearStep:      0.025,
+		MidStep:       0.10,
+		FarStep:       0.25,
+		MidDistance:   4,
+		FarDistance:   10,
+		MaxDistance:   20,
+		SurfaceBand:   0.45,
+		FlatStepBoost: 1.45,
+	}
+}
+
 type Renderer struct {
 	Cam *Camera
 	Stk *Stick
@@ -51,10 +77,11 @@ type Renderer struct {
 
 	Textures [4]*ImageSrc
 
-	pseudoShadowShader *ebiten.Shader
-	worldBuffer        *ebiten.Image
-	pseudoShadowConfig PseudoShadowConfig
-	terrainRenderScale float64
+	pseudoShadowShader    *ebiten.Shader
+	worldBuffer           *ebiten.Image
+	pseudoShadowConfig    PseudoShadowConfig
+	terrainRenderScale    float64
+	terrainRaymarchConfig TerrainRaymarchConfig
 
 	aimPos        vec3.Vec3
 	aimDirection  AimDirection
@@ -130,6 +157,7 @@ func (r *Renderer) Init(screenWidth, screenHeight float64, canvasWidth, canvasHe
 	}
 	r.pseudoShadowShader, _ = ebiten.NewShader(pseudoShadowShaderByte)
 	r.terrainRenderScale = 1
+	r.terrainRaymarchConfig = DefaultTerrainRaymarchConfig()
 	r.worldBuffer = ebiten.NewImage(int(r.screenWidth), int(r.screenHeight))
 
 	r.counter = 0
@@ -650,6 +678,35 @@ func (r *Renderer) SetTerrainRenderScale(scale float64) {
 	r.worldBuffer = nil
 }
 
+// SetTerrainRaymarchConfig configures adaptive terrain traversal without
+// changing the source heightmap or its interpolation mode.
+func (r *Renderer) SetTerrainRaymarchConfig(config TerrainRaymarchConfig) {
+	defaults := DefaultTerrainRaymarchConfig()
+	if config.NearStep <= 0 {
+		config.NearStep = defaults.NearStep
+	}
+	if config.MidStep < config.NearStep {
+		config.MidStep = config.NearStep
+	}
+	if config.FarStep < config.MidStep {
+		config.FarStep = config.MidStep
+	}
+	if config.MidDistance <= 0 {
+		config.MidDistance = defaults.MidDistance
+	}
+	if config.FarDistance < config.MidDistance {
+		config.FarDistance = config.MidDistance
+	}
+	if config.MaxDistance < config.FarDistance {
+		config.MaxDistance = config.FarDistance
+	}
+	if config.SurfaceBand <= 0 {
+		config.SurfaceBand = defaults.SurfaceBand
+	}
+	config.FlatStepBoost = max(1, min(2, config.FlatStepBoost))
+	r.terrainRaymarchConfig = config
+}
+
 func (r *Renderer) terrainRenderSize() (int, int) {
 	scale := r.terrainRenderScale
 	if scale <= 0 {
@@ -690,6 +747,14 @@ func (r *Renderer) renderWall(screen *ebiten.Image) {
 		"DefaultFloorTextureID": r.DefaultFloorTextureID,
 		"DefaultFloorColor":     []float32{r.DefaultFloorColor[0], r.DefaultFloorColor[1], r.DefaultFloorColor[2]},
 		"TerrainInterpolation":  float32(r.Wld.TerrainInterpolation),
+		"TerrainNearStep":       r.terrainRaymarchConfig.NearStep,
+		"TerrainMidStep":        r.terrainRaymarchConfig.MidStep,
+		"TerrainFarStep":        r.terrainRaymarchConfig.FarStep,
+		"TerrainMidDistance":    r.terrainRaymarchConfig.MidDistance,
+		"TerrainFarDistance":    r.terrainRaymarchConfig.FarDistance,
+		"TerrainMaxDistance":    r.terrainRaymarchConfig.MaxDistance,
+		"TerrainSurfaceBand":    r.terrainRaymarchConfig.SurfaceBand,
+		"TerrainFlatStepBoost":  r.terrainRaymarchConfig.FlatStepBoost,
 		"AimHighlightEnabled":   float32(0),
 	}
 	if r.AimHighlightEnabled {
