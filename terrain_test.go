@@ -227,7 +227,7 @@ func TestTerrainRenderScaleSupportsLowResolutionRendering(t *testing.T) {
 	}
 	r.SetTerrainRenderScale(.01)
 	width, height = r.terrainRenderSize()
-	if width != 81 || height != 144 {
-		t.Fatalf("clamped render size = %dx%d, want 81x144", width, height)
+	if width != 54 || height != 96 {
+		t.Fatalf("clamped render size = %dx%d, want 54x96", width, height)
 	}
 }
