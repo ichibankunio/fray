@@ -227,7 +227,19 @@ func TestTerrainRenderScaleSupportsLowResolutionRendering(t *testing.T) {
 	}
 	r.SetTerrainRenderScale(.01)
 	width, height = r.terrainRenderSize()
-	if width != 54 || height != 96 {
-		t.Fatalf("clamped render size = %dx%d, want 54x96", width, height)
+	if width != 43 || height != 76 {
+		t.Fatalf("clamped render size = %dx%d, want 43x76", width, height)
+	}
+}
+
+func TestTerrainDebugModeRejectsUnknownMode(t *testing.T) {
+	r := &Renderer{}
+	r.SetTerrainDebugMode(TerrainDebugSlope)
+	if r.TerrainDebugMode() != TerrainDebugSlope {
+		t.Fatal("debug mode was not retained")
+	}
+	r.SetTerrainDebugMode(TerrainDebugMode(99))
+	if r.TerrainDebugMode() != TerrainDebugOff {
+		t.Fatal("unknown debug mode was not disabled")
 	}
 }

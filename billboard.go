@@ -6,6 +6,7 @@ import (
 	"sort"
 
 	"github.com/hajimehoshi/ebiten/v2"
+	"github.com/hajimehoshi/ebiten/v2/vector"
 	"github.com/ichibankunio/fvec/vec2"
 	"github.com/ichibankunio/fvec/vec3"
 )
@@ -39,6 +40,8 @@ type BillboardConfig struct {
 	TerrainOcclusion      bool
 	Occlusion             TerrainOcclusionConfig
 	OcclusionWidthSamples int
+	DebugBounds           bool
+	DebugColor            color.RGBA
 }
 
 func DefaultBillboardConfig() BillboardConfig {
@@ -112,6 +115,9 @@ func (r *Renderer) DrawBillboardInstances(dst, texture *ebiten.Image, mesh Billb
 	}
 	sort.Slice(projected, func(i, j int) bool { return projected[i].depth > projected[j].depth })
 	r.drawProjectedBillboards(dst, texture, mesh, projected, config)
+	if config.DebugBounds {
+		r.drawBillboardDebugBounds(dst, mesh, projected, config)
+	}
 }
 
 func normalizedBillboardConfig(config BillboardConfig) BillboardConfig {
@@ -195,6 +201,25 @@ func (r *Renderer) drawProjectedBillboards(dst, texture *ebiten.Image, mesh Bill
 func billboardPixelHeight(height, depth, screenHeight float64, config BillboardConfig) float32 {
 	projected := float32(height / max(.001, depth) * screenHeight)
 	return max(config.MinPixelHeight, min(config.MaxPixelHeight, projected))
+}
+
+func (r *Renderer) drawBillboardDebugBounds(dst *ebiten.Image, mesh BillboardMesh, projected []projectedBillboard, config BillboardConfig) {
+	debugColor := config.DebugColor
+	if debugColor == (color.RGBA{}) {
+		debugColor = color.RGBA{255, 196, 32, 255}
+	}
+	halfWidth := float32(billboardMeshHalfWidth(mesh))
+	for _, item := range projected {
+		height := billboardPixelHeight(item.instance.Height, item.depth, r.screenHeight, config)
+		left := item.x - halfWidth*height
+		top := item.baseY - height
+		width := halfWidth * height * 2
+		bottom := min(item.baseY, item.clipY)
+		vector.StrokeRect(dst, left, top, width, max(0, bottom-top), 1, debugColor, false)
+		if item.clipY < item.baseY {
+			vector.StrokeLine(dst, left, item.clipY, left+width, item.clipY, 1, color.RGBA{255, 64, 64, 255}, false)
+		}
+	}
 }
 
 func clipBillboardTriangle(triangle [3]ebiten.Vertex, clipY float32) []ebiten.Vertex {

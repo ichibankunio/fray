@@ -49,6 +49,17 @@ type TerrainRaymarchConfig struct {
 	FlatStepBoost float32
 }
 
+type TerrainDebugMode uint8
+
+const (
+	TerrainDebugOff TerrainDebugMode = iota
+	TerrainDebugHeight
+	TerrainDebugNormal
+	TerrainDebugSlope
+	TerrainDebugVisibility
+	TerrainDebugWater
+)
+
 func DefaultTerrainRaymarchConfig() TerrainRaymarchConfig {
 	return TerrainRaymarchConfig{
 		Adaptive:      true,
@@ -126,6 +137,7 @@ type Renderer struct {
 	terrainRaymarchConfig   TerrainRaymarchConfig
 	terrainAtmosphereConfig TerrainAtmosphereConfig
 	terrainWaterConfig      TerrainWaterConfig
+	terrainDebugMode        TerrainDebugMode
 
 	aimPos        vec3.Vec3
 	aimDirection  AimDirection
@@ -204,6 +216,7 @@ func (r *Renderer) Init(screenWidth, screenHeight float64, canvasWidth, canvasHe
 	r.terrainRaymarchConfig = DefaultTerrainRaymarchConfig()
 	r.terrainAtmosphereConfig = DefaultTerrainAtmosphereConfig()
 	r.terrainWaterConfig = DefaultTerrainWaterConfig()
+	r.terrainDebugMode = TerrainDebugOff
 	r.worldBuffer = ebiten.NewImage(int(r.screenWidth), int(r.screenHeight))
 
 	r.counter = 0
@@ -720,7 +733,7 @@ func (r *Renderer) Draw(screen *ebiten.Image) {
 // SetTerrainRenderScale lowers only the 3D world resolution. UI is still
 // rendered at the original screen resolution.
 func (r *Renderer) SetTerrainRenderScale(scale float64) {
-	r.terrainRenderScale = max(0.10, min(1, scale))
+	r.terrainRenderScale = max(0.08, min(1, scale))
 	r.worldBuffer = nil
 }
 
@@ -768,6 +781,15 @@ func (r *Renderer) SetTerrainWaterConfig(config TerrainWaterConfig) {
 	config.WaveStrength = max(0, min(.25, config.WaveStrength))
 	r.terrainWaterConfig = config
 }
+
+func (r *Renderer) SetTerrainDebugMode(mode TerrainDebugMode) {
+	if mode > TerrainDebugWater {
+		mode = TerrainDebugOff
+	}
+	r.terrainDebugMode = mode
+}
+
+func (r *Renderer) TerrainDebugMode() TerrainDebugMode { return r.terrainDebugMode }
 
 func (r *Renderer) terrainRenderSize() (int, int) {
 	scale := r.terrainRenderScale
@@ -832,6 +854,8 @@ func (r *Renderer) renderWall(screen *ebiten.Image) {
 		"TerrainWaterReflection":   r.terrainWaterConfig.Reflection,
 		"TerrainWaterShoreWidth":   r.terrainWaterConfig.ShoreWidth,
 		"TerrainWaterWaveStrength": r.terrainWaterConfig.WaveStrength,
+		"TerrainDebugMode":         float32(r.terrainDebugMode),
+		"TerrainDebugDepth":        float32(max(1, r.Wld.canvasDepth)),
 		"AimHighlightEnabled":      float32(0),
 	}
 	if r.terrainRaymarchConfig.Adaptive {
