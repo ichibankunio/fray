@@ -39,6 +39,9 @@ type World struct {
 	HeightBase []float32
 	SlopeX     []float32
 	SlopeY     []float32
+	// TerrainVisibility combines heightmap-derived ambient occlusion and
+	// directional terrain shadowing. One value per horizontal cell, in [0, 1].
+	TerrainVisibility []float32
 
 	TerrainInterpolation TerrainInterpolation
 
@@ -62,6 +65,7 @@ func (w *World) Init(screenWidth int, screenHeight int, canvasWidth int, canvasH
 	w.HeightBase = make([]float32, canvasWidth*canvasHeight)
 	w.SlopeX = make([]float32, canvasWidth*canvasHeight)
 	w.SlopeY = make([]float32, canvasWidth*canvasHeight)
+	w.TerrainVisibility = make([]float32, canvasWidth*canvasHeight)
 	w.WorldMap = make([][]uint8, canvasDepth)
 	for i := 0; i < canvasDepth; i++ {
 		w.WorldMap[i] = make([]uint8, canvasWidth*canvasHeight)
@@ -223,6 +227,44 @@ func (w *World) BuildHeightMapFromWorldMap() {
 		w.HeightMap[i] = uint8(height)
 	}
 	w.SyncHeightPlanesFromHeightMap()
+	w.BuildTerrainVisibility()
+}
+
+// BuildTerrainVisibility derives low-frequency ambient occlusion and sunlight
+// visibility from the inferred heightmap. It does not add terrain authoring data.
+func (w *World) BuildTerrainVisibility() {
+	directions := [][2]int{{-1, 0}, {1, 0}, {0, -1}, {0, 1}, {-1, -1}, {1, -1}, {-1, 1}, {1, 1}}
+	for y := 0; y < w.canvasHeight; y++ {
+		for x := 0; x < w.canvasWidth; x++ {
+			center := w.heightSample(x, y)
+			occlusion := 0.0
+			for _, direction := range directions {
+				maxRise := 0.0
+				for radius := 1; radius <= 6; radius++ {
+					dx := direction[0] * radius
+					dy := direction[1] * radius
+					distance := math.Hypot(float64(dx), float64(dy))
+					rise := (w.heightSample(x+dx, y+dy) - center) / distance
+					maxRise = max(maxRise, rise)
+				}
+				occlusion += min(1, maxRise/2.5)
+			}
+			ambient := 1 - (occlusion/float64(len(directions)))*0.48
+
+			// Match the horizontal direction used by the terrain shader's sun.
+			sunVisibility := 1.0
+			for radius := 1; radius <= 10; radius++ {
+				sampleX := x - int(math.Round(float64(radius)*0.57))
+				sampleY := y - int(math.Round(float64(radius)*0.82))
+				sunRayHeight := center + float64(radius)*0.58
+				if w.heightSample(sampleX, sampleY) > sunRayHeight {
+					sunVisibility = 0.68
+					break
+				}
+			}
+			w.TerrainVisibility[y*w.canvasWidth+x] = float32(max(0.35, min(1, ambient*sunVisibility)))
+		}
+	}
 }
 
 func (w *World) SyncHeightPlanesFromHeightMap() {

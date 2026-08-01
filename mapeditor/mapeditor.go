@@ -132,6 +132,12 @@ func (me *MapEditor) PrintHeightMapOnAlphaLayer(src []uint8, dst *ebiten.Image) 
 }
 
 func (me *MapEditor) PrintHeightPlaneMap(base, slopeX, slopeY []float32, dst *ebiten.Image) {
+	me.PrintHeightPlaneMapWithVisibility(base, slopeX, slopeY, nil, dst)
+}
+
+// PrintHeightPlaneMapWithVisibility stores inferred height data and optional
+// terrain visibility in one GPU lookup texture. Visibility occupies alpha.
+func (me *MapEditor) PrintHeightPlaneMapWithVisibility(base, slopeX, slopeY, visibility []float32, dst *ebiten.Image) {
 	if cap(me.heightPlaneBuffer) < me.screenWidth*me.screenHeight*4 {
 		me.heightPlaneBuffer = make([]uint8, me.screenWidth*me.screenHeight*4)
 	} else {
@@ -179,7 +185,11 @@ func (me *MapEditor) PrintHeightPlaneMap(base, slopeX, slopeY []float32, dst *eb
 		buffer[dstIdx] = uint8(baseV + 0.5)
 		buffer[dstIdx+1] = uint8(encSlopeX + 0.5)
 		buffer[dstIdx+2] = uint8(encSlopeY + 0.5)
-		buffer[dstIdx+3] = 255
+		visibilityV := float32(1)
+		if i < len(visibility) {
+			visibilityV = max(0, min(1, visibility[i]))
+		}
+		buffer[dstIdx+3] = uint8(visibilityV*255 + 0.5)
 	}
 
 	target := dst
