@@ -7,6 +7,7 @@ import (
 	"math"
 
 	"github.com/hajimehoshi/ebiten/v2"
+	"github.com/ichibankunio/fvec/vec3"
 )
 
 type TerrainInterpolation uint8
@@ -169,6 +170,23 @@ func (w *World) heightAtBlocks(x, y float64) float64 {
 		)
 	}
 	return monotonicCubic(rows[0], rows[1], rows[2], rows[3], fracY)
+}
+
+// SampleTerrainHeight returns the interpolated terrain height in grid blocks.
+func (w *World) SampleTerrainHeight(x, y float64) float64 {
+	return w.heightAtBlocks(x, y)
+}
+
+// SampleTerrainNormal returns the normalized surface normal inferred from the
+// same interpolation used by rendering and collision.
+func (w *World) SampleTerrainNormal(x, y float64) vec3.Vec3 {
+	return w.terrainNormalAtBlocks(x, y)
+}
+
+// SampleTerrainSlope returns rise over horizontal run at a point.
+func (w *World) SampleTerrainSlope(x, y float64) float64 {
+	normal := w.terrainNormalAtBlocks(x, y)
+	return math.Hypot(normal.X, normal.Y) / max(0.001, normal.Z)
 }
 
 func (w *World) heightSample(x, y int) float64 {

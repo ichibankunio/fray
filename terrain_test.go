@@ -179,3 +179,21 @@ func TestAirborneCameraDoesNotSnapToSlope(t *testing.T) {
 		t.Fatalf("airborne camera Z = %v, want unchanged %v", r.Cam.subjectPos.Z, beforeZ)
 	}
 }
+
+func TestTerrainSamplingAPIUsesSelectedInterpolation(t *testing.T) {
+	w := &World{}
+	w.Init(32, 32, 3, 3, 8)
+	w.HeightMap = []uint8{
+		1, 3, 3,
+		1, 3, 3,
+		1, 3, 3,
+	}
+	w.TerrainInterpolation = TerrainInterpolationLinear
+	if got := w.SampleTerrainHeight(.5, .5); got != 2 {
+		t.Fatalf("height = %v, want 2", got)
+	}
+	normal := w.SampleTerrainNormal(.5, .5)
+	if normal.Z <= 0 || w.SampleTerrainSlope(.5, .5) <= 0 {
+		t.Fatalf("unexpected normal/slope: %+v, %v", normal, w.SampleTerrainSlope(.5, .5))
+	}
+}
