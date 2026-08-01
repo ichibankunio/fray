@@ -197,3 +197,17 @@ func TestTerrainSamplingAPIUsesSelectedInterpolation(t *testing.T) {
 		t.Fatalf("unexpected normal/slope: %+v, %v", normal, w.SampleTerrainSlope(.5, .5))
 	}
 }
+
+func TestTerrainRenderScaleSupportsLowResolutionRendering(t *testing.T) {
+	r := &Renderer{screenWidth: 540, screenHeight: 960}
+	r.SetTerrainRenderScale(.20)
+	width, height := r.terrainRenderSize()
+	if width != 108 || height != 192 {
+		t.Fatalf("render size = %dx%d, want 108x192", width, height)
+	}
+	r.SetTerrainRenderScale(.01)
+	width, height = r.terrainRenderSize()
+	if width != 81 || height != 144 {
+		t.Fatalf("clamped render size = %dx%d, want 81x144", width, height)
+	}
+}

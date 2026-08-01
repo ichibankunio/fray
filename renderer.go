@@ -701,7 +701,7 @@ func (r *Renderer) Draw(screen *ebiten.Image) {
 // SetTerrainRenderScale lowers only the 3D world resolution. UI is still
 // rendered at the original screen resolution.
 func (r *Renderer) SetTerrainRenderScale(scale float64) {
-	r.terrainRenderScale = max(0.25, min(1, scale))
+	r.terrainRenderScale = max(0.15, min(1, scale))
 	r.worldBuffer = nil
 }
 
