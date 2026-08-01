@@ -89,16 +89,17 @@ func (r *Renderer) DrawBillboardInstances(dst, texture *ebiten.Image, mesh Billb
 		}
 		clipY := baseY
 		if config.TerrainOcclusion {
-			visibleHeight := math.Inf(-1)
-			samples := max(1, config.OcclusionWidthSamples)
-			for sample := 0; sample < samples; sample++ {
-				offset := 0.0
-				if samples > 1 {
-					offset = (float64(sample)/float64(samples-1)*2 - 1) * meshHalfWidth * instance.Height
+			visibleHeight := r.Wld.TerrainVisibleHeight(position.X, position.Y, position.Z, instance.Position.X, instance.Position.Y, config.Occlusion)
+			// Most objects are fully visible and need only the center ray. Sample
+			// both edges only near a terrain silhouette where partial clipping is
+			// actually possible.
+			if visibleHeight > instance.Position.Z && config.OcclusionWidthSamples > 1 {
+				halfWidth := meshHalfWidth * instance.Height
+				for _, offset := range [2]float64{-halfWidth, halfWidth} {
+					targetX := instance.Position.X + right.X*offset
+					targetY := instance.Position.Y + right.Y*offset
+					visibleHeight = max(visibleHeight, r.Wld.TerrainVisibleHeight(position.X, position.Y, position.Z, targetX, targetY, config.Occlusion))
 				}
-				targetX := instance.Position.X + right.X*offset
-				targetY := instance.Position.Y + right.Y*offset
-				visibleHeight = max(visibleHeight, r.Wld.TerrainVisibleHeight(position.X, position.Y, position.Z, targetX, targetY, config.Occlusion))
 			}
 			if visibleHeight >= instance.Position.Z+instance.Height {
 				continue
