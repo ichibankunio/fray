@@ -6,6 +6,7 @@ import (
 	"image"
 	"image/color"
 	"os"
+	"time"
 
 	"github.com/hajimehoshi/ebiten/v2"
 	"github.com/hajimehoshi/ebiten/v2/ebitenutil"
@@ -26,16 +27,23 @@ const (
 )
 
 type editorGame struct {
-	path      string
-	renderer  *fray.Renderer
-	session   *terraineditorruntime.Session
-	panel     *terraineditorui.Panel
-	gameImage *ebiten.Image
-	layout    terraineditorui.SplitLayout
-	status    string
+	path         string
+	renderer     *fray.Renderer
+	session      *terraineditorruntime.Session
+	panel        *terraineditorui.Panel
+	gameImage    *ebiten.Image
+	layout       terraineditorui.SplitLayout
+	status       string
+	lowFPSFrames int
+	frameCount   int
+	perfEnd      time.Time
+	perfTotal    float64
+	perfMinimum  float64
+	perfSamples  int
 }
 
 func main() {
+	perfDuration := flag.Duration("perf-duration", 0, "run for this duration and print FPS measurements")
 	flag.Parse()
 	if flag.NArg() != 1 {
 		fmt.Fprintln(os.Stderr, "usage: fray-terrain-gui <terrain.json>")
@@ -46,6 +54,9 @@ func main() {
 		fmt.Fprintln(os.Stderr, "fray-terrain-gui:", err)
 		os.Exit(1)
 	}
+	if *perfDuration > 0 {
+		game.perfEnd = time.Now().Add(*perfDuration)
+	}
 	ebiten.SetWindowSize(windowWidth, windowHeight)
 	ebiten.SetWindowTitle("fray terrain editor")
 	ebiten.SetWindowResizingMode(ebiten.WindowResizingModeEnabled)
@@ -53,6 +64,9 @@ func main() {
 	if err := ebiten.RunGame(game); err != nil {
 		fmt.Fprintln(os.Stderr, "fray-terrain-gui:", err)
 		os.Exit(1)
+	}
+	if game.perfSamples > 0 {
+		fmt.Printf("PERF fps_avg=%.2f fps_min=%.2f samples=%d\n", game.perfTotal/float64(game.perfSamples), game.perfMinimum, game.perfSamples)
 	}
 }
 
@@ -109,6 +123,26 @@ func newEditorGame(path string) (*editorGame, error) {
 }
 
 func (g *editorGame) Update() error {
+	g.frameCount++
+	if g.frameCount > 180 && !g.perfEnd.IsZero() {
+		fps := ebiten.ActualFPS()
+		g.perfTotal += fps
+		g.perfSamples++
+		if g.perfMinimum == 0 || fps < g.perfMinimum {
+			g.perfMinimum = fps
+		}
+		if time.Now().After(g.perfEnd) {
+			return ebiten.Termination
+		}
+	}
+	if g.frameCount > 180 && ebiten.ActualFPS() < 59 {
+		g.lowFPSFrames++
+	} else {
+		g.lowFPSFrames = 0
+	}
+	if g.lowFPSFrames == 120 {
+		g.status = fmt.Sprintf("PERFORMANCE WARNING: %.1f FPS; stop and review this feature", ebiten.ActualFPS())
+	}
 	if inpututil.IsKeyJustPressed(ebiten.KeyEscape) {
 		return ebiten.Termination
 	}
@@ -121,8 +155,11 @@ func (g *editorGame) Update() error {
 	if inpututil.IsKeyJustPressed(ebiten.KeyS) && (ebiten.IsKeyPressed(ebiten.KeyControl) || ebiten.IsKeyPressed(ebiten.KeyMeta)) {
 		if err := g.session.Document.Save(g.path); err != nil {
 			g.status = "save failed: " + err.Error()
+		} else if err := g.session.History.SaveCommands(g.path + ".history.json"); err != nil {
+			g.status = "history save failed: " + err.Error()
 		} else {
 			g.session.History.MarkSaved()
+			g.panel.MarkSaved()
 			g.status = "saved " + g.path
 		}
 	}
@@ -134,7 +171,8 @@ func (g *editorGame) Draw(screen *ebiten.Image) {
 	g.renderer.Draw(g.gameImage)
 	screen.DrawImage(g.gameImage, nil)
 	g.panel.Draw(screen)
-	ebitenutil.DebugPrintAt(screen, fmt.Sprintf("%.1f FPS | %s", ebiten.ActualFPS(), g.status), 8, 8)
+	m := g.session.Metrics
+	ebitenutil.DebugPrintAt(screen, fmt.Sprintf("%.1f FPS | edit %.2fms GPU %.2fms cells %d | %s", ebiten.ActualFPS(), float64(m.LastEdit.Microseconds())/1000, float64(m.LastGPU.Microseconds())/1000, m.ChangedCells, g.status), 8, 8)
 }
 
 func (g *editorGame) Layout(_, _ int) (int, int) { return windowWidth, windowHeight }

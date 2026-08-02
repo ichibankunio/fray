@@ -43,6 +43,54 @@ func Summarize(changeSet ChangeSet) ChangeSummary {
 	return summary
 }
 
+func Diff(before, after *Document) (ChangeSet, error) {
+	if before == nil || after == nil {
+		return ChangeSet{}, fmt.Errorf("terrain diff requires two documents")
+	}
+	if before.CanvasWidth != after.CanvasWidth || before.CanvasHeight != after.CanvasHeight || before.CanvasDepth != after.CanvasDepth {
+		return ChangeSet{}, fmt.Errorf("terrain diff dimensions do not match")
+	}
+	result := ChangeSet{}
+	for y := 0; y < before.CanvasHeight; y++ {
+		for x := 0; x < before.CanvasWidth; x++ {
+			index := y*before.CanvasWidth + x
+			equal := true
+			for z := 0; z < before.CanvasDepth; z++ {
+				var b, a uint8
+				if z < len(before.Layers) {
+					b = before.Layers[z][index]
+				}
+				if z < len(after.Layers) {
+					a = after.Layers[z][index]
+				}
+				if b != a {
+					equal = false
+					break
+				}
+			}
+			if equal {
+				continue
+			}
+			cell := image.Rect(x, y, x+1, y+1)
+			if result.Region.Empty() {
+				result.Region = cell
+			} else {
+				result.Region = result.Region.Union(cell)
+			}
+			result.Changes = append(result.Changes, ColumnChange{X: x, Y: y, Before: before.column(x, y), After: after.column(x, y)})
+		}
+	}
+	return result, nil
+}
+
+func (d *Document) Clone() (*Document, error) {
+	data, err := d.Marshal()
+	if err != nil {
+		return nil, err
+	}
+	return Parse(data)
+}
+
 // Preview calculates the exact change without leaving the document modified.
 func (d *Document) Preview(command Command) (ChangeSet, error) {
 	changeSet, err := d.Apply(command)

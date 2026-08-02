@@ -21,6 +21,13 @@ type Parameters struct {
 	Amount  int     `json:"amount,omitempty"`
 	Falloff string  `json:"falloff,omitempty"`
 	Blend   float64 `json:"blend,omitempty"`
+	ToX     int     `json:"toX,omitempty"`
+	ToY     int     `json:"toY,omitempty"`
+	Axis    string  `json:"axis,omitempty"`
+	Shape   string  `json:"shape,omitempty"`
+	RadiusX int     `json:"radiusX,omitempty"`
+	RadiusY int     `json:"radiusY,omitempty"`
+	Seed    int     `json:"seed,omitempty"`
 }
 
 type ColumnChange struct {
@@ -38,6 +45,10 @@ type ChangeSet struct {
 func (d *Document) Apply(command Command) (ChangeSet, error) {
 	if err := d.Validate(); err != nil {
 		return ChangeSet{}, err
+	}
+	switch command.Operation {
+	case "copy-region", "move-region", "flip-region":
+		return d.applyRegionCommand(command)
 	}
 	region, err := d.commandRegion(command)
 	if err != nil {
@@ -105,6 +116,92 @@ func (d *Document) Apply(command Command) (ChangeSet, error) {
 	return changeSet, nil
 }
 
+func (d *Document) applyRegionCommand(command Command) (ChangeSet, error) {
+	p := command.Parameters
+	if p.Width <= 0 || p.Rows <= 0 {
+		return ChangeSet{}, fmt.Errorf("%s requires positive width and rows", command.Operation)
+	}
+	source := image.Rect(p.X, p.Y, p.X+p.Width, p.Y+p.Rows)
+	if source != source.Intersect(image.Rect(0, 0, d.CanvasWidth, d.CanvasHeight)) {
+		return ChangeSet{}, fmt.Errorf("source region %v is outside terrain bounds", source)
+	}
+	destination := source
+	if command.Operation == "copy-region" || command.Operation == "move-region" {
+		destination = image.Rect(p.ToX, p.ToY, p.ToX+p.Width, p.ToY+p.Rows)
+		if destination != destination.Intersect(image.Rect(0, 0, d.CanvasWidth, d.CanvasHeight)) {
+			return ChangeSet{}, fmt.Errorf("destination region %v is outside terrain bounds", destination)
+		}
+	}
+	if command.Operation == "flip-region" && p.Axis != "horizontal" && p.Axis != "vertical" {
+		return ChangeSet{}, fmt.Errorf("flip-region axis must be horizontal or vertical")
+	}
+
+	// Snapshot source columns before writing so overlapping moves are deterministic.
+	sourceColumns := make([][]uint8, p.Width*p.Rows)
+	for y := 0; y < p.Rows; y++ {
+		for x := 0; x < p.Width; x++ {
+			sourceColumns[y*p.Width+x] = d.column(p.X+x, p.Y+y)
+		}
+	}
+	targets := make(map[image.Point][]uint8, p.Width*p.Rows*2)
+	if command.Operation == "move-region" {
+		empty := make([]uint8, d.CanvasDepth)
+		for y := 0; y < p.Rows; y++ {
+			for x := 0; x < p.Width; x++ {
+				targets[image.Pt(p.X+x, p.Y+y)] = empty
+			}
+		}
+	}
+	for y := 0; y < p.Rows; y++ {
+		for x := 0; x < p.Width; x++ {
+			sx, sy := x, y
+			point := image.Pt(destination.Min.X+x, destination.Min.Y+y)
+			if command.Operation == "flip-region" {
+				if p.Axis == "horizontal" {
+					sx = p.Width - 1 - x
+				} else {
+					sy = p.Rows - 1 - y
+				}
+			}
+			targets[point] = sourceColumns[sy*p.Width+sx]
+		}
+	}
+	return d.applyColumnTargets(targets), nil
+}
+
+func (d *Document) applyColumnTargets(targets map[image.Point][]uint8) ChangeSet {
+	changeSet := ChangeSet{}
+	for y := 0; y < d.CanvasHeight; y++ {
+		for x := 0; x < d.CanvasWidth; x++ {
+			point := image.Pt(x, y)
+			after, ok := targets[point]
+			if !ok {
+				continue
+			}
+			before := d.column(x, y)
+			equal := true
+			for z := range before {
+				if before[z] != after[z] {
+					equal = false
+					break
+				}
+			}
+			if equal {
+				continue
+			}
+			d.setColumn(x, y, after)
+			changeSet.Changes = append(changeSet.Changes, ColumnChange{X: x, Y: y, Before: before, After: append([]uint8(nil), after...)})
+			cell := image.Rect(x, y, x+1, y+1)
+			if changeSet.Region.Empty() {
+				changeSet.Region = cell
+			} else {
+				changeSet.Region = changeSet.Region.Union(cell)
+			}
+		}
+	}
+	return changeSet
+}
+
 func (d *Document) ApplyChangeSet(changeSet ChangeSet, forward bool) error {
 	for _, change := range changeSet.Changes {
 		if change.X < 0 || change.Y < 0 || change.X >= d.CanvasWidth || change.Y >= d.CanvasHeight {
@@ -127,6 +224,9 @@ func (d *Document) commandRegion(command Command) (image.Rectangle, error) {
 	region := image.Rect(p.X, p.Y, p.X+1, p.Y+1)
 	if p.Width > 0 && p.Rows > 0 {
 		region = image.Rect(p.X, p.Y, p.X+p.Width, p.Y+p.Rows)
+	} else if p.RadiusX > 0 || p.RadiusY > 0 {
+		rx, ry := max(1, p.RadiusX), max(1, p.RadiusY)
+		region = image.Rect(p.X-rx, p.Y-ry, p.X+rx+1, p.Y+ry+1)
 	} else if p.Radius > 0 {
 		region = image.Rect(p.X-p.Radius, p.Y-p.Radius, p.X+p.Radius+1, p.Y+p.Radius+1)
 	}
@@ -140,10 +240,42 @@ func (d *Document) commandRegion(command Command) (image.Rectangle, error) {
 func commandIncludesCell(command Command, x, y int) bool {
 	p := command.Parameters
 	if p.Radius <= 0 || p.Width > 0 || p.Rows > 0 {
-		return true
+		if p.RadiusX <= 0 && p.RadiusY <= 0 {
+			return true
+		}
 	}
 	dx, dy := x-p.X, y-p.Y
-	return dx*dx+dy*dy <= p.Radius*p.Radius
+	rx, ry := p.Radius, p.Radius
+	if p.RadiusX > 0 || p.RadiusY > 0 {
+		rx, ry = max(1, p.RadiusX), max(1, p.RadiusY)
+	}
+	switch p.Shape {
+	case "square":
+		return absInt(dx) <= rx && absInt(dy) <= ry
+	case "diamond":
+		return absInt(dx)*ry+absInt(dy)*rx <= rx*ry
+	case "noise":
+		if float64(dx*dx)/float64(rx*rx)+float64(dy*dy)/float64(ry*ry) > 1 {
+			return false
+		}
+		return terrainHash(x, y, p.Seed)%100 >= 28
+	default:
+		return float64(dx*dx)/float64(rx*rx)+float64(dy*dy)/float64(ry*ry) <= 1
+	}
+}
+
+func terrainHash(x, y, seed int) uint32 {
+	v := uint32(x)*0x9e3779b1 ^ uint32(y)*0x85ebca77 ^ uint32(seed)
+	v ^= v >> 16
+	v *= 0x7feb352d
+	v ^= v >> 15
+	return v
+}
+func absInt(value int) int {
+	if value < 0 {
+		return -value
+	}
+	return value
 }
 
 func brushAmount(command Command, x, y, amount int) int {

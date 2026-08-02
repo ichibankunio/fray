@@ -1,6 +1,9 @@
 package terraineditor
 
-import "testing"
+import (
+	"path/filepath"
+	"testing"
+)
 
 func TestSetRaiseLowerFlattenAndSmooth(t *testing.T) {
 	tests := []struct {
@@ -56,5 +59,66 @@ func TestSmoothUsesSnapshotAndIsOrderIndependent(t *testing.T) {
 	changeSet, err := document.Apply(Command{Operation: "smooth", Parameters: Parameters{X: 1, Y: 1, Radius: 2, Blend: 1}})
 	if err != nil || len(changeSet.Changes) == 0 {
 		t.Fatalf("smooth changes=%d err=%v", len(changeSet.Changes), err)
+	}
+}
+
+func TestRegionCommandsPreserveMaterialsAndOverlap(t *testing.T) {
+	document := testDocument()
+	document.Layers[0][0] = 7
+	_, err := document.Apply(Command{Operation: "copy-region", Parameters: Parameters{X: 0, Y: 0, Width: 2, Rows: 1, ToX: 1, ToY: 1}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := document.Layers[0][4]; got != 7 {
+		t.Fatalf("copied material = %d, want 7", got)
+	}
+
+	_, err = document.Apply(Command{Operation: "move-region", Parameters: Parameters{X: 0, Y: 0, Width: 2, Rows: 1, ToX: 1, ToY: 0}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := document.HeightAt(0, 0); got != 0 {
+		t.Fatalf("cleared source height = %d", got)
+	}
+	if got := document.Layers[0][1]; got != 7 {
+		t.Fatalf("overlapping move material = %d, want 7", got)
+	}
+}
+
+func TestFlipRegion(t *testing.T) {
+	document := testDocument()
+	_, _ = document.Apply(Command{Operation: "set-height", Parameters: Parameters{X: 0, Y: 0, Height: 3}})
+	_, err := document.Apply(Command{Operation: "flip-region", Parameters: Parameters{X: 0, Y: 0, Width: 3, Rows: 1, Axis: "horizontal"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := document.HeightAt(2, 0); got != 3 {
+		t.Fatalf("flipped height = %d, want 3", got)
+	}
+}
+
+func TestHistoryCommandsPersistAndReplay(t *testing.T) {
+	document := testDocument()
+	history := NewHistory(document)
+	command := Command{Operation: "raise", Parameters: Parameters{X: 1, Y: 1, Amount: 2}}
+	_, _ = history.Apply(command)
+	path := filepath.Join(t.TempDir(), "history.json")
+	if err := history.SaveCommands(path); err != nil {
+		t.Fatal(err)
+	}
+	commands, err := LoadCommands(path)
+	if err != nil || len(commands) != 1 {
+		t.Fatalf("commands=%v err=%v", commands, err)
+	}
+	replayed := testDocument()
+	if _, err := Replay(replayed, commands, Constraints{}); err != nil {
+		t.Fatal(err)
+	}
+	if got := replayed.HeightAt(1, 1); got != 3 {
+		t.Fatalf("replayed height=%d, want 3", got)
+	}
+	_, _, _ = history.Undo()
+	if len(history.Commands()) != 0 {
+		t.Fatal("undone command remained in active history")
 	}
 }

@@ -32,20 +32,53 @@ func hasArgument(arguments []string, wanted string) bool {
 
 func run(arguments []string) error {
 	if len(arguments) == 0 {
-		return fmt.Errorf("usage: fray-terrain <inspect|validate|apply|set-height|raise|lower|flatten|smooth> ...")
+		return fmt.Errorf("usage: fray-terrain <inspect|validate|analyze|apply|set-height|raise|lower|flatten|smooth|copy-region|move-region|flip-region> ...")
 	}
 	switch arguments[0] {
 	case "inspect":
 		return inspect(arguments[1:])
 	case "validate":
 		return validate(arguments[1:])
+	case "analyze":
+		return analyze(arguments[1:])
 	case "apply":
 		return applyBatch(arguments[1:])
-	case "set-height", "raise", "lower", "flatten", "smooth":
+	case "set-height", "raise", "lower", "flatten", "smooth", "copy-region", "move-region", "flip-region":
 		return applyOne(arguments[0], arguments[1:])
 	default:
 		return fmt.Errorf("unknown command %q", arguments[0])
 	}
+}
+
+func analyze(arguments []string) error {
+	flags := flag.NewFlagSet("analyze", flag.ContinueOnError)
+	maximumSlope := flags.Float64("max-slope", 4, "maximum adjacent height difference")
+	spikeHeight := flags.Float64("spike-height", 3, "isolated peak or pit threshold")
+	suggestions := flags.String("suggestions", "", "write suggested command list")
+	if err := flags.Parse(arguments); err != nil {
+		return err
+	}
+	if flags.NArg() != 1 {
+		return fmt.Errorf("analyze requires one terrain JSON path")
+	}
+	document, err := terraineditor.Load(flags.Arg(0))
+	if err != nil {
+		return err
+	}
+	report := terraineditor.Analyze(document, terraineditor.AnalysisOptions{MaximumSlope: *maximumSlope, SpikeHeight: *spikeHeight})
+	if *suggestions != "" {
+		commands := make([]terraineditor.Command, 0, len(report.Issues))
+		for _, issue := range report.Issues {
+			if issue.Suggestion != nil {
+				commands = append(commands, *issue.Suggestion)
+			}
+		}
+		data, _ := json.MarshalIndent(commands, "", "  ")
+		if err := os.WriteFile(*suggestions, append(data, '\n'), 0o644); err != nil {
+			return err
+		}
+	}
+	return json.NewEncoder(os.Stdout).Encode(map[string]any{"ok": true, "result": report})
 }
 
 type inspection struct {
@@ -222,6 +255,13 @@ func applyOne(operation string, arguments []string) error {
 	amount := flags.Int("amount", 1, "height delta")
 	falloff := flags.String("falloff", "", "brush falloff: smooth or empty")
 	blend := flags.Float64("blend", .5, "smoothing blend 0..1")
+	toX := flags.Int("to-x", 0, "destination x coordinate")
+	toY := flags.Int("to-y", 0, "destination y coordinate")
+	axis := flags.String("axis", "horizontal", "flip axis: horizontal or vertical")
+	shape := flags.String("shape", "circle", "brush shape: circle, ellipse, square, diamond, or noise")
+	radiusX := flags.Int("radius-x", 0, "horizontal brush radius")
+	radiusY := flags.Int("radius-y", 0, "vertical brush radius")
+	seed := flags.Int("seed", 0, "deterministic noise brush seed")
 	output := flags.String("output", "", "output path; defaults to replacing input")
 	dryRun := flags.Bool("dry-run", false, "calculate changes without writing")
 	jsonOutput := flags.Bool("json", false, "emit machine-readable JSON")
@@ -237,7 +277,7 @@ func applyOne(operation string, arguments []string) error {
 	if err != nil {
 		return err
 	}
-	command := terraineditor.Command{Operation: operation, Parameters: terraineditor.Parameters{X: *x, Y: *y, Width: *width, Rows: *rows, Radius: *radius, Height: *height, Amount: *amount, Falloff: *falloff, Blend: *blend}}
+	command := terraineditor.Command{Operation: operation, Parameters: terraineditor.Parameters{X: *x, Y: *y, Width: *width, Rows: *rows, Radius: *radius, Height: *height, Amount: *amount, Falloff: *falloff, Blend: *blend, ToX: *toX, ToY: *toY, Axis: *axis, Shape: *shape, RadiusX: *radiusX, RadiusY: *radiusY, Seed: *seed}}
 	changeSet, err := document.ApplyConstrained(command, limits.constraints())
 	if err != nil {
 		return err

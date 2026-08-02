@@ -3,6 +3,7 @@ package terraineditorruntime
 
 import (
 	"fmt"
+	"time"
 
 	"github.com/ichibankunio/fray"
 	"github.com/ichibankunio/fray/terraineditor"
@@ -12,6 +13,16 @@ type Session struct {
 	Document *terraineditor.Document
 	History  *terraineditor.History
 	Renderer *fray.Renderer
+	Metrics  Metrics
+}
+
+type Metrics struct {
+	Edits        uint64
+	ChangedCells uint64
+	LastEdit     time.Duration
+	MaximumEdit  time.Duration
+	LastGPU      time.Duration
+	MaximumGPU   time.Duration
 }
 
 func New(document *terraineditor.Document, renderer *fray.Renderer) (*Session, error) {
@@ -27,11 +38,13 @@ func New(document *terraineditor.Document, renderer *fray.Renderer) (*Session, e
 
 // Apply updates the editor document and live CPU terrain in one transaction.
 func (s *Session) Apply(command terraineditor.Command) (terraineditor.ChangeSet, error) {
+	started := time.Now()
 	changeSet, err := s.History.Apply(command)
 	if err != nil {
 		return terraineditor.ChangeSet{}, err
 	}
 	s.applyColumns(changeSet)
+	s.recordEdit(time.Since(started), len(changeSet.Changes))
 	return changeSet, nil
 }
 
@@ -52,7 +65,25 @@ func (s *Session) Redo() (terraineditor.ChangeSet, bool, error) {
 }
 
 // SyncGPU uploads the merged dirty region. Call once after all edits in a frame.
-func (s *Session) SyncGPU() error { return s.Renderer.SyncTerrainGPU() }
+func (s *Session) SyncGPU() error {
+	started := time.Now()
+	err := s.Renderer.SyncTerrainGPU()
+	elapsed := time.Since(started)
+	s.Metrics.LastGPU = elapsed
+	if elapsed > s.Metrics.MaximumGPU {
+		s.Metrics.MaximumGPU = elapsed
+	}
+	return err
+}
+
+func (s *Session) recordEdit(elapsed time.Duration, cells int) {
+	s.Metrics.Edits++
+	s.Metrics.ChangedCells += uint64(cells)
+	s.Metrics.LastEdit = elapsed
+	if elapsed > s.Metrics.MaximumEdit {
+		s.Metrics.MaximumEdit = elapsed
+	}
+}
 
 // Reload replaces the live document after an externally edited file validates.
 func (s *Session) Reload(document *terraineditor.Document) error {
