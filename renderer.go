@@ -141,6 +141,7 @@ type Renderer struct {
 	terrainAtmosphereConfig TerrainAtmosphereConfig
 	terrainWaterConfig      TerrainWaterConfig
 	terrainDebugMode        TerrainDebugMode
+	frameStats              frameStatsRecorder
 
 	aimPos        vec3.Vec3
 	aimDirection  AimDirection
@@ -703,6 +704,8 @@ func (r *Renderer) syncLastSpriteParameters() {
 }
 
 func (r *Renderer) Draw(screen *ebiten.Image) {
+	frameStart := r.beginFrameStats()
+	defer r.endFrameStats(frameStart)
 	renderWidth, renderHeight := r.terrainRenderSize()
 	if r.worldBuffer == nil || r.worldBuffer.Bounds().Dx() != renderWidth || r.worldBuffer.Bounds().Dy() != renderHeight {
 		r.worldBuffer = ebiten.NewImage(renderWidth, renderHeight)

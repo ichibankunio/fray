@@ -56,12 +56,13 @@ func (w *World) GenerateTerrainPlacements(rule TerrainPlacementRule) []TerrainPl
 			jitterY := (hashUnit(hash>>32) - 0.5) * float64(rule.CellSize) * 0.82
 			px := max(0.001, min(float64(w.canvasWidth)-1.001, float64(x)+float64(rule.CellSize)*0.5+jitterX))
 			py := max(0.001, min(float64(w.canvasHeight)-1.001, float64(y)+float64(rule.CellSize)*0.5+jitterY))
-			height := w.heightAtBlocks(px, py)
+			surface := w.SampleTerrain(px, py)
+			height := surface.Position.Z
 			if height < rule.MinHeight || height > rule.MaxHeight {
 				continue
 			}
-			normal := w.SampleTerrainNormal(px, py)
-			slope := math.Hypot(normal.X, normal.Y) / max(0.001, normal.Z)
+			normal := surface.Normal
+			slope := surface.Slope
 			if slope > rule.MaxSlope {
 				continue
 			}
@@ -78,11 +79,7 @@ func (w *World) GenerateTerrainPlacements(rule TerrainPlacementRule) []TerrainPl
 }
 
 func (w *World) terrainNormalAtBlocks(x, y float64) vec3.Vec3 {
-	const epsilon = 0.08
-	dx := w.heightAtBlocks(x+epsilon, y) - w.heightAtBlocks(x-epsilon, y)
-	dy := w.heightAtBlocks(x, y+epsilon) - w.heightAtBlocks(x, y-epsilon)
-	normal := vec3.New(-dx, -dy, epsilon*2)
-	return normal.Scale(1 / max(0.001, normal.Length()))
+	return w.SampleTerrain(x, y).Normal
 }
 
 func terrainPlacementHash(seed, x, y uint64) uint64 {

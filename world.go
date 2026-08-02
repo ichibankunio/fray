@@ -4,6 +4,8 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"image"
+	"io"
 	"math"
 
 	"github.com/hajimehoshi/ebiten/v2"
@@ -11,6 +13,11 @@ import (
 )
 
 type TerrainInterpolation uint8
+
+const (
+	TerrainJSONVersionLegacy  = 0
+	TerrainJSONVersionCurrent = 3
+)
 
 const (
 	TerrainInterpolationFlat TerrainInterpolation = iota
@@ -48,6 +55,8 @@ type World struct {
 	TerrainInterpolation TerrainInterpolation
 	WaterLevel           float64
 	HasWater             bool
+	terrainRevision      uint64
+	terrainDirty         image.Rectangle
 
 	screenWidth  int
 	screenHeight int
@@ -91,9 +100,13 @@ func (w *World) LoadTerrainJSON(data []byte) error {
 	if err := decoder.Decode(&document); err != nil {
 		return fmt.Errorf("decode terrain JSON: %w", err)
 	}
-	if document.Version < 0 || document.Version > 3 {
+	if err := ensureTerrainJSONEOF(decoder); err != nil {
+		return err
+	}
+	if document.Version < TerrainJSONVersionLegacy || document.Version > TerrainJSONVersionCurrent {
 		return fmt.Errorf("unsupported terrain JSON version %d", document.Version)
 	}
+	migrateTerrainJSONDocument(&document)
 	if document.CanvasWidth != 0 && document.CanvasWidth != w.canvasWidth {
 		return fmt.Errorf("terrain width %d does not match world width %d", document.CanvasWidth, w.canvasWidth)
 	}
@@ -131,6 +144,36 @@ func (w *World) LoadTerrainJSON(data []byte) error {
 		copy(w.WorldMap[z], document.Layers[z])
 	}
 	w.BuildHeightMapFromWorldMap()
+	return nil
+}
+
+func migrateTerrainJSONDocument(document *terrainJSONDocument) {
+	// Versions 0-2 used linear interpolation when the field was absent. Keep
+	// that default explicit so future schema migrations do not change old maps.
+	if document.Version < 3 && document.Terrain.Interpolation == "" {
+		document.Terrain.Interpolation = "linear"
+	}
+}
+
+// ValidateTerrainJSON validates a document against explicit world dimensions
+// without modifying an existing World.
+func ValidateTerrainJSON(data []byte, width, height, depth int) error {
+	if width <= 0 || height <= 0 || depth <= 0 {
+		return fmt.Errorf("terrain dimensions must be positive")
+	}
+	w := &World{}
+	w.Init(width, height, width, height, depth)
+	return w.LoadTerrainJSON(data)
+}
+
+func ensureTerrainJSONEOF(decoder *json.Decoder) error {
+	var trailing any
+	if err := decoder.Decode(&trailing); err != io.EOF {
+		if err == nil {
+			return fmt.Errorf("decode terrain JSON: multiple documents")
+		}
+		return fmt.Errorf("decode terrain JSON trailing data: %w", err)
+	}
 	return nil
 }
 
@@ -191,13 +234,12 @@ func (w *World) SampleTerrainHeight(x, y float64) float64 {
 // SampleTerrainNormal returns the normalized surface normal inferred from the
 // same interpolation used by rendering and collision.
 func (w *World) SampleTerrainNormal(x, y float64) vec3.Vec3 {
-	return w.terrainNormalAtBlocks(x, y)
+	return w.SampleTerrain(x, y).Normal
 }
 
 // SampleTerrainSlope returns rise over horizontal run at a point.
 func (w *World) SampleTerrainSlope(x, y float64) float64 {
-	normal := w.terrainNormalAtBlocks(x, y)
-	return math.Hypot(normal.X, normal.Y) / max(0.001, normal.Z)
+	return w.SampleTerrain(x, y).Slope
 }
 
 func (w *World) heightSample(x, y int) float64 {
@@ -245,26 +287,20 @@ func (w *World) CanvasDepth() int {
 }
 
 func (w *World) BuildHeightMapFromWorldMap() {
-	for i := 0; i < len(w.HeightMap); i++ {
-		height := 0
-		for z := w.canvasDepth - 1; z >= 0; z-- {
-			if w.WorldMap[z][i] != 0 {
-				height = z + 1
-				break
-			}
-		}
-		w.HeightMap[i] = uint8(height)
-	}
-	w.SyncHeightPlanesFromHeightMap()
-	w.BuildTerrainVisibility()
+	w.RebuildTerrainRegion(image.Rect(0, 0, w.canvasWidth, w.canvasHeight))
 }
 
 // BuildTerrainVisibility derives low-frequency ambient occlusion and sunlight
 // visibility from the inferred heightmap. It does not add terrain authoring data.
 func (w *World) BuildTerrainVisibility() {
+	w.buildTerrainVisibilityRegion(image.Rect(0, 0, w.canvasWidth, w.canvasHeight))
+}
+
+func (w *World) buildTerrainVisibilityRegion(region image.Rectangle) {
 	directions := [][2]int{{-1, 0}, {1, 0}, {0, -1}, {0, 1}, {-1, -1}, {1, -1}, {-1, 1}, {1, 1}}
-	for y := 0; y < w.canvasHeight; y++ {
-		for x := 0; x < w.canvasWidth; x++ {
+	region = region.Intersect(image.Rect(0, 0, w.canvasWidth, w.canvasHeight))
+	for y := region.Min.Y; y < region.Max.Y; y++ {
+		for x := region.Min.X; x < region.Max.X; x++ {
 			center := w.heightSample(x, y)
 			occlusion := 0.0
 			for _, direction := range directions {
@@ -297,6 +333,10 @@ func (w *World) BuildTerrainVisibility() {
 }
 
 func (w *World) SyncHeightPlanesFromHeightMap() {
+	w.syncHeightPlanesRegion(image.Rect(0, 0, w.canvasWidth, w.canvasHeight))
+}
+
+func (w *World) syncHeightPlanesRegion(region image.Rectangle) {
 	hAt := func(x, y int) float32 {
 		if x < 0 {
 			x = 0
@@ -320,8 +360,9 @@ func (w *World) SyncHeightPlanesFromHeightMap() {
 		return v
 	}
 
-	for y := 0; y < w.canvasHeight; y++ {
-		for x := 0; x < w.canvasWidth; x++ {
+	region = region.Intersect(image.Rect(0, 0, w.canvasWidth, w.canvasHeight))
+	for y := region.Min.Y; y < region.Max.Y; y++ {
+		for x := region.Min.X; x < region.Max.X; x++ {
 			idx := y*w.canvasWidth + x
 			h := hAt(x, y)
 			dx := (hAt(x+1, y) - hAt(x-1, y)) * 0.5
@@ -360,10 +401,7 @@ func (w *World) DeleteValue(x, y, z int) {
 	if z == int(w.HeightMap[y*w.canvasWidth+x]) && z != 0 {
 		// fmt.Println("OK", z, int(w.HeightMap[y*w.canvasWidth+x]))
 		w.WorldMap[z-1][y*w.canvasWidth+x] = 0
-		w.HeightMap[y*w.canvasWidth+x] = uint8(z - 1)
-		w.HeightBase[y*w.canvasWidth+x] = float32(z - 1)
-		w.SlopeX[y*w.canvasWidth+x] = 0
-		w.SlopeY[y*w.canvasWidth+x] = 0
+		w.RebuildTerrainRegion(image.Rect(x, y, x+1, y+1))
 	} else {
 		// fmt.Println("NG", z ,int(w.HeightMap[y*w.canvasWidth+x]))
 	}
@@ -373,12 +411,7 @@ func (w *World) SetValue(x, y, z int, value uint8) {
 	if z-1 == int(w.HeightMap[y*w.canvasWidth+x]) {
 		// fmt.Println("OK", z-1, int(w.HeightMap[y*w.canvasWidth+x]))
 		w.WorldMap[z-1][y*w.canvasWidth+x] = value + 1
-		if z > int(w.HeightMap[y*w.canvasWidth+x]) {
-			w.HeightMap[y*w.canvasWidth+x] = uint8(z)
-			w.HeightBase[y*w.canvasWidth+x] = float32(z)
-			w.SlopeX[y*w.canvasWidth+x] = 0
-			w.SlopeY[y*w.canvasWidth+x] = 0
-		}
+		w.RebuildTerrainRegion(image.Rect(x, y, x+1, y+1))
 	} else {
 		// fmt.Println("NG", z-1 ,int(w.HeightMap[y*w.canvasWidth+x]))
 	}

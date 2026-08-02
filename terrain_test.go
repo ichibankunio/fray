@@ -155,6 +155,19 @@ func TestLoadTerrainJSONRejectsUnknownInterpolation(t *testing.T) {
 	}
 }
 
+func TestValidateTerrainJSONRejectsTrailingDocument(t *testing.T) {
+	err := ValidateTerrainJSON([]byte(`{"version":3,"layers":[[1]]} {"version":3,"layers":[[1]]}`), 1, 1, 1)
+	if err == nil {
+		t.Fatal("ValidateTerrainJSON accepted multiple documents")
+	}
+}
+
+func TestTerrainJSONVersionConstants(t *testing.T) {
+	if TerrainJSONVersionLegacy != 0 || TerrainJSONVersionCurrent != 3 {
+		t.Fatalf("terrain JSON versions = %d..%d", TerrainJSONVersionLegacy, TerrainJSONVersionCurrent)
+	}
+}
+
 func TestGroundedCameraFollowsInterpolatedSlope(t *testing.T) {
 	r := newTerrainTestRenderer([]uint8{0, 1, 0, 1})
 	r.Wld.TerrainInterpolation = TerrainInterpolationMonotonic
