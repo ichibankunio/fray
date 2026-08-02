@@ -15,6 +15,7 @@ func ExampleWorld_terrainAPICompatibility() {
 	_, _ = world.RaycastTerrain(vec3.New(0, 0, 1), vec3.New(0, 0, -1), 10, fray.DefaultTerrainRaycastConfig())
 	_, _ = world.SweepTerrainSphere(vec3.New(0, 0, 1), vec3.New(0, 0, -1), .25, fray.DefaultTerrainRaycastConfig())
 	_, _ = world.SweepTerrainCapsule(vec3.New(0, 0, 1), vec3.New(0, 0, -1), .25, .5, fray.DefaultTerrainRaycastConfig())
+	_ = world.MoveOnTerrain(vec3.New(0, 0, 1), vec3.New(1, 0, 0), fray.DefaultTerrainMovementConfig())
 	_ = world.RebuildTerrainRegion(image.Rect(0, 0, 1, 1))
 	_ = world.TerrainRevision()
 	_ = world.ConsumeTerrainDirtyRegion()

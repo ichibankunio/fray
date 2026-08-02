@@ -57,6 +57,7 @@ type World struct {
 	HasWater             bool
 	terrainRevision      uint64
 	terrainDirty         image.Rectangle
+	terrainGradientBound float64
 
 	screenWidth  int
 	screenHeight int

@@ -26,6 +26,7 @@ func (w *World) RebuildTerrainRegion(region image.Rectangle) image.Rectangle {
 			w.HeightMap[index] = uint8(height)
 		}
 	}
+	w.expandTerrainGradientBound(region)
 
 	slopeRegion := expandTerrainRegion(region, 1).Intersect(bounds)
 	visibilityRegion := expandTerrainRegion(region, terrainVisibilityRadius).Intersect(bounds)
@@ -38,6 +39,7 @@ func (w *World) RebuildTerrainRegion(region image.Rectangle) image.Rectangle {
 
 // RebuildTerrain refreshes all data inferred from WorldMap.
 func (w *World) RebuildTerrain() {
+	w.terrainGradientBound = 0
 	w.RebuildTerrainRegion(image.Rect(0, 0, w.canvasWidth, w.canvasHeight))
 }
 
@@ -93,4 +95,26 @@ func unionTerrainRegion(a, b image.Rectangle) image.Rectangle {
 		return a
 	}
 	return a.Union(b)
+}
+
+// Monotonic bicubic derivatives are conservatively bounded from neighboring
+// sample differences. The bound may remain higher after terrain is flattened,
+// which only reduces adaptive stepping and never changes collision results.
+func (w *World) expandTerrainGradientBound(region image.Rectangle) {
+	region = expandTerrainRegion(region, 1).Intersect(image.Rect(0, 0, w.canvasWidth, w.canvasHeight))
+	maxDifference := w.terrainGradientBound / 4
+	for y := region.Min.Y; y < region.Max.Y; y++ {
+		for x := region.Min.X; x < region.Max.X; x++ {
+			height := w.heightSample(x, y)
+			maxDifference = max(maxDifference, absFloat(height-w.heightSample(x+1, y)), absFloat(height-w.heightSample(x, y+1)))
+		}
+	}
+	w.terrainGradientBound = max(.001, maxDifference*4)
+}
+
+func absFloat(value float64) float64 {
+	if value < 0 {
+		return -value
+	}
+	return value
 }

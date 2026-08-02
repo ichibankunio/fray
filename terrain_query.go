@@ -38,11 +38,12 @@ type TerrainRaycastHit struct {
 // TerrainRaycastConfig controls CPU ray traversal in grid blocks.
 type TerrainRaycastConfig struct {
 	Step            float64
+	MaxStep         float64
 	RefinementSteps int
 }
 
 func DefaultTerrainRaycastConfig() TerrainRaycastConfig {
-	return TerrainRaycastConfig{Step: 0.05, RefinementSteps: 12}
+	return TerrainRaycastConfig{Step: 0.05, MaxStep: 0.5, RefinementSteps: 12}
 }
 
 // SampleTerrain returns height, exact interpolation gradient, normal, and slope together.

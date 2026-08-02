@@ -1,6 +1,10 @@
 package fray
 
-import "github.com/ichibankunio/fvec/vec3"
+import (
+	"math"
+
+	"github.com/ichibankunio/fvec/vec3"
+)
 
 // TerrainSweepHit describes the first contact along a swept volume movement.
 type TerrainSweepHit struct {
@@ -30,6 +34,10 @@ func (w *World) sweepTerrainVerticalCapsule(origin, movement vec3.Vec3, radius, 
 	if config.RefinementSteps <= 0 {
 		config.RefinementSteps = DefaultTerrainRaycastConfig().RefinementSteps
 	}
+	if config.MaxStep <= 0 {
+		config.MaxStep = DefaultTerrainRaycastConfig().MaxStep
+	}
+	config.MaxStep = max(config.Step, config.MaxStep)
 	direction := vec3.New(0, 0, 0)
 	if distance > 1e-12 {
 		direction = movement.Scale(1 / distance)
@@ -44,22 +52,24 @@ func (w *World) sweepTerrainVerticalCapsule(origin, movement vec3.Vec3, radius, 
 		return clearance, surface, center
 	}
 	initial, surface, center := clearanceAt(0)
-	if surface.Inside && initial <= 0 {
+	inwardSpeed := direction.X*surface.Normal.X + direction.Y*surface.Normal.Y + direction.Z*surface.Normal.Z
+	if surface.Inside && initial <= 0 && inwardSpeed < -1e-9 {
 		return TerrainSweepHit{TerrainSample: surface, Position: center}, true
 	}
 	if distance <= 1e-12 {
 		return TerrainSweepHit{}, false
 	}
 	previous := 0.0
-	previousClearance := initial
-	for travel := min(config.Step, distance); travel <= distance+1e-12; travel = min(travel+config.Step, distance) {
+	previousClearance := max(initial, 1e-9)
+	step := config.Step
+	for travel := min(step, distance); travel <= distance+1e-12; travel = min(travel+step, distance) {
 		clearance, currentSurface, _ := clearanceAt(travel)
-		if currentSurface.Inside && previousClearance > 0 && clearance <= 0 {
+		if currentSurface.Inside && previousClearance > 0 && clearance < -1e-9 {
 			near, far := previous, travel
 			for i := 0; i < config.RefinementSteps; i++ {
 				mid := (near + far) * .5
 				midClearance, _, _ := clearanceAt(mid)
-				if midClearance <= 0 {
+				if midClearance < 0 {
 					far = mid
 				} else {
 					near = mid
@@ -72,6 +82,14 @@ func (w *World) sweepTerrainVerticalCapsule(origin, movement vec3.Vec3, radius, 
 			break
 		}
 		previous, previousClearance = travel, clearance
+		closingBound := absFloat(direction.Z) + w.terrainGradientBound*math.Hypot(direction.X, direction.Y)
+		if closingBound > 1e-9 {
+			// Half the Lipschitz-safe distance leaves margin for interpolation and
+			// changing local normals while still skipping empty space aggressively.
+			step = max(config.Step, min(config.MaxStep, clearance/closingBound*.5))
+		} else {
+			step = config.MaxStep
+		}
 	}
 	return TerrainSweepHit{}, false
 }

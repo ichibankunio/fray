@@ -51,3 +51,22 @@ func BenchmarkTerrainLineOfSight(b *testing.B) {
 		_ = w.TerrainLineOfSight(4, 4, 20, 115, 115, 20, config)
 	}
 }
+
+func BenchmarkSweepTerrainSphereAdaptive(b *testing.B) {
+	w := flatQueryWorld(2)
+	config := DefaultTerrainRaycastConfig()
+	b.ReportAllocs()
+	for i := 0; i < b.N; i++ {
+		_, _ = w.SweepTerrainSphere(vec3.New(1, 1, 30), vec3.New(0, 0, -40), .4, config)
+	}
+}
+
+func BenchmarkSweepTerrainSphereFixed(b *testing.B) {
+	w := flatQueryWorld(2)
+	config := DefaultTerrainRaycastConfig()
+	config.MaxStep = config.Step
+	b.ReportAllocs()
+	for i := 0; i < b.N; i++ {
+		_, _ = w.SweepTerrainSphere(vec3.New(1, 1, 30), vec3.New(0, 0, -40), .4, config)
+	}
+}
