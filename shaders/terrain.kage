@@ -1,0 +1,404 @@
+//go:build ignore
+
+//kage:unit pixels
+package main
+
+var ScreenSize vec2
+var Pos vec2
+var Dir vec2
+var Plane vec2
+var PosZ float
+var Pitch float
+var TexSize float
+var WorldSize vec2
+var TerrainInterpolation float
+var TerrainNearStep float
+var TerrainMidStep float
+var TerrainFarStep float
+var TerrainMidDistance float
+var TerrainFarDistance float
+var TerrainMaxDistance float
+var TerrainSurfaceBand float
+var TerrainFlatStepBoost float
+var TerrainAdaptive float
+var TerrainZenithColor vec3
+var TerrainHorizonColor vec3
+var TerrainFogColor vec3
+var TerrainDistanceFog float
+var TerrainHeightFog float
+var TerrainFogBaseHeight float
+var TerrainSunGlow float
+var TerrainWaterEnabled float
+var TerrainWaterLevel float
+var TerrainWaterDeepColor vec3
+var TerrainWaterShallowColor vec3
+var TerrainWaterReflection float
+var TerrainWaterShoreWidth float
+var TerrainWaterWaveStrength float
+var TerrainDebugMode float
+var TerrainDebugDepth float
+
+func HeightSample(cell vec2) float {
+	safeCell := clamp(cell, vec2(0.0), WorldSize-vec2(1.0))
+	return (imageSrc3UnsafeAt(imageSrc0Origin()+safeCell)*255.0).r
+}
+
+func TerrainVisibility(pos vec2) float {
+	cell := floor(pos)
+	frac := pos-cell
+	v00 := imageSrc3UnsafeAt(imageSrc0Origin()+clamp(cell, vec2(0.0), WorldSize-vec2(1.0))).a
+	v10 := imageSrc3UnsafeAt(imageSrc0Origin()+clamp(cell+vec2(1.0, 0.0), vec2(0.0), WorldSize-vec2(1.0))).a
+	v01 := imageSrc3UnsafeAt(imageSrc0Origin()+clamp(cell+vec2(0.0, 1.0), vec2(0.0), WorldSize-vec2(1.0))).a
+	v11 := imageSrc3UnsafeAt(imageSrc0Origin()+clamp(cell+vec2(1.0, 1.0), vec2(0.0), WorldSize-vec2(1.0))).a
+	top := mix(v00, v10, frac.x)
+	bottom := mix(v01, v11, frac.x)
+	return mix(top, bottom, frac.y)
+}
+
+func MonotonicSlope(before float, after float) float {
+	if before*after <= 0.0 {
+		return 0.0
+	}
+	return 2.0*before*after/(before+after)
+}
+
+func MonotonicCubic(p0 float, p1 float, p2 float, p3 float, t float) float {
+	d0 := p1-p0
+	d1 := p2-p1
+	d2 := p3-p2
+	m1 := MonotonicSlope(d0, d1)
+	m2 := MonotonicSlope(d1, d2)
+	t2 := t*t
+	t3 := t2*t
+	return (2.0*t3-3.0*t2+1.0)*p1 + (t3-2.0*t2+t)*m1 + (-2.0*t3+3.0*t2)*p2 + (t3-t2)*m2
+}
+
+// The x component is a value and yz are its derivatives. Carrying all three
+// through the Hermite expression lets one 4x4 height fetch produce both the
+// surface height and its exact partial derivatives.
+func MonotonicSlopeGradient(before vec3, after vec3) vec3 {
+	if before.x*after.x <= 0.0 {
+		return vec3(0.0)
+	}
+	sum := before.x+after.x
+	product := before.x*after.x
+	gradientProduct := before.yz*after.x + before.x*after.yz
+	gradientSum := before.yz+after.yz
+	return vec3(2.0*product/sum, 2.0*(gradientProduct*sum-product*gradientSum)/(sum*sum))
+}
+
+func MonotonicCubicGradient(p0 vec3, p1 vec3, p2 vec3, p3 vec3, t vec3) vec3 {
+	d0 := p1-p0
+	d1 := p2-p1
+	d2 := p3-p2
+	m1 := MonotonicSlopeGradient(d0, d1)
+	m2 := MonotonicSlopeGradient(d1, d2)
+	t2 := t.x*t.x
+	t3 := t2*t.x
+	b0 := 2.0*t3-3.0*t2+1.0
+	b1 := t3-2.0*t2+t.x
+	b2 := -2.0*t3+3.0*t2
+	b3 := t3-t2
+	db0 := (6.0*t2-6.0*t.x)*t.yz
+	db1 := (3.0*t2-4.0*t.x+1.0)*t.yz
+	db2 := (-6.0*t2+6.0*t.x)*t.yz
+	db3 := (3.0*t2-2.0*t.x)*t.yz
+	value := b0*p1.x + b1*m1.x + b2*p2.x + b3*m2.x
+	gradient := db0*p1.x+b0*p1.yz + db1*m1.x+b1*m1.yz + db2*p2.x+b2*p2.yz + db3*m2.x+b3*m2.yz
+	return vec3(value, gradient)
+}
+
+func TerrainHeightLinear(pos vec2) float {
+	cell := floor(pos)
+	frac := pos-cell
+	h00 := HeightSample(cell)
+	h10 := HeightSample(cell+vec2(1.0, 0.0))
+	h01 := HeightSample(cell+vec2(0.0, 1.0))
+	h11 := HeightSample(cell+vec2(1.0, 1.0))
+	top := h00+(h10-h00)*frac.x
+	bottom := h01+(h11-h01)*frac.x
+	return top+(bottom-top)*frac.y
+}
+
+func TerrainHeight(pos vec2) float {
+	cell := floor(pos)
+	frac := pos-cell
+	h00 := HeightSample(cell)
+	if TerrainInterpolation < 0.5 {
+		return h00
+	}
+	if TerrainInterpolation < 1.5 {
+		return TerrainHeightLinear(pos)
+	}
+
+	q0 := MonotonicCubic(HeightSample(cell+vec2(-1.0, -1.0)), HeightSample(cell+vec2(0.0, -1.0)), HeightSample(cell+vec2(1.0, -1.0)), HeightSample(cell+vec2(2.0, -1.0)), frac.x)
+	q1 := MonotonicCubic(HeightSample(cell+vec2(-1.0, 0.0)), HeightSample(cell), HeightSample(cell+vec2(1.0, 0.0)), HeightSample(cell+vec2(2.0, 0.0)), frac.x)
+	q2 := MonotonicCubic(HeightSample(cell+vec2(-1.0, 1.0)), HeightSample(cell+vec2(0.0, 1.0)), HeightSample(cell+vec2(1.0, 1.0)), HeightSample(cell+vec2(2.0, 1.0)), frac.x)
+	q3 := MonotonicCubic(HeightSample(cell+vec2(-1.0, 2.0)), HeightSample(cell+vec2(0.0, 2.0)), HeightSample(cell+vec2(1.0, 2.0)), HeightSample(cell+vec2(2.0, 2.0)), frac.x)
+	return MonotonicCubic(q0, q1, q2, q3, frac.y)
+}
+
+func TerrainHeightAndGradient(pos vec2) vec3 {
+	cell := floor(pos)
+	frac := pos-cell
+	h00 := HeightSample(cell)
+	if TerrainInterpolation < 0.5 {
+		return vec3(h00, 0.0, 0.0)
+	}
+	if TerrainInterpolation < 1.5 {
+		h10 := HeightSample(cell+vec2(1.0, 0.0))
+		h01 := HeightSample(cell+vec2(0.0, 1.0))
+		h11 := HeightSample(cell+vec2(1.0, 1.0))
+		top := h00+(h10-h00)*frac.x
+		bottom := h01+(h11-h01)*frac.x
+		return vec3(top+(bottom-top)*frac.y, mix(h10-h00, h11-h01, frac.y), bottom-top)
+	}
+
+	// Each source sample is loaded exactly once. The first interpolation pass
+	// carries d/dx; the second pass carries it forward and adds d/dy.
+	tx := vec3(frac.x, 1.0, 0.0)
+	q0 := MonotonicCubicGradient(
+		vec3(HeightSample(cell+vec2(-1.0, -1.0)), 0.0, 0.0), vec3(HeightSample(cell+vec2(0.0, -1.0)), 0.0, 0.0),
+		vec3(HeightSample(cell+vec2(1.0, -1.0)), 0.0, 0.0), vec3(HeightSample(cell+vec2(2.0, -1.0)), 0.0, 0.0), tx)
+	q1 := MonotonicCubicGradient(
+		vec3(HeightSample(cell+vec2(-1.0, 0.0)), 0.0, 0.0), vec3(h00, 0.0, 0.0),
+		vec3(HeightSample(cell+vec2(1.0, 0.0)), 0.0, 0.0), vec3(HeightSample(cell+vec2(2.0, 0.0)), 0.0, 0.0), tx)
+	q2 := MonotonicCubicGradient(
+		vec3(HeightSample(cell+vec2(-1.0, 1.0)), 0.0, 0.0), vec3(HeightSample(cell+vec2(0.0, 1.0)), 0.0, 0.0),
+		vec3(HeightSample(cell+vec2(1.0, 1.0)), 0.0, 0.0), vec3(HeightSample(cell+vec2(2.0, 1.0)), 0.0, 0.0), tx)
+	q3 := MonotonicCubicGradient(
+		vec3(HeightSample(cell+vec2(-1.0, 2.0)), 0.0, 0.0), vec3(HeightSample(cell+vec2(0.0, 2.0)), 0.0, 0.0),
+		vec3(HeightSample(cell+vec2(1.0, 2.0)), 0.0, 0.0), vec3(HeightSample(cell+vec2(2.0, 2.0)), 0.0, 0.0), tx)
+	return MonotonicCubicGradient(q0, q1, q2, q3, vec3(frac.y, 0.0, 1.0))
+}
+
+func TextureID(cell vec2, height float) float {
+	layer := max(0.0, ceil(height)-1.0)
+	mapTilesPerRow := max(1.0, floor(ScreenSize.x/WorldSize.x))
+	tile := floor(layer / 4.0)
+	texOffset := vec2(mod(tile, mapTilesPerRow), floor(tile/mapTilesPerRow)) * WorldSize.x
+	fragment := imageSrc2UnsafeAt(imageSrc0Origin() + texOffset + cell) * 255.0
+	channel := mod(layer, 4.0)
+	id := (1.0-step(0.1, channel))*fragment.r
+	id += step(1.0, channel)*(1.0-step(1.1, channel))*fragment.g
+	id += step(2.0, channel)*(1.0-step(2.1, channel))*fragment.b
+	id += step(3.0, channel)*(1.0-step(3.1, channel))*fragment.a
+	return max(0.0, id-1.0)
+}
+
+func DominantCell(pos vec2) vec2 {
+	cell := floor(pos)
+	bestCell := cell
+	bestHeight := HeightSample(cell)
+	if HeightSample(cell+vec2(1.0, 0.0)) > bestHeight {
+		bestCell = cell + vec2(1.0, 0.0)
+		bestHeight = HeightSample(bestCell)
+	}
+	if HeightSample(cell+vec2(0.0, 1.0)) > bestHeight {
+		bestCell = cell + vec2(0.0, 1.0)
+		bestHeight = HeightSample(bestCell)
+	}
+	if HeightSample(cell+vec2(1.0, 1.0)) > bestHeight {
+		bestCell = cell + vec2(1.0, 1.0)
+	}
+	return bestCell
+}
+
+func SampleMaterial(pos vec2, id float) vec4 {
+	tilesPerRow := max(1.0, floor(ScreenSize.x/TexSize))
+	texturePos := vec2(
+		fract(pos.x)+mod(id, tilesPerRow),
+		fract(pos.y)+floor(id/tilesPerRow),
+	) * TexSize
+	return imageSrc1UnsafeAt(imageSrc0Origin() + texturePos)
+}
+
+func SampleTerrainTexture(pos vec2, height float, normal vec3, distance float) vec4 {
+	// Use the rock tile as neutral albedo detail, then color it continuously
+	// from inferred height and slope. Near terrain uses three projections;
+	// distant terrain uses the top projection only to avoid shimmer and cost.
+	top := SampleMaterial(pos, 2.0)
+	detail := top
+	if distance < 12.0 {
+		xProjection := SampleMaterial(vec2(pos.y, height), 2.0)
+		yProjection := SampleMaterial(vec2(pos.x, height), 2.0)
+		weights := abs(normal)
+		weights *= weights
+		weights /= max(0.001, weights.x+weights.y+weights.z)
+		detail = xProjection*weights.x + yProjection*weights.y + top*weights.z
+	}
+
+	steepness := 1.0-normal.z
+	soilWeight := smoothstep(0.08, 0.24, steepness)
+	rockWeight := smoothstep(0.22, 0.48, steepness)
+	snowWeight := smoothstep(19.0, 25.0, height) * (1.0-smoothstep(0.28, 0.52, steepness))
+	grassTint := vec3(0.31, 0.54, 0.32)
+	soilTint := vec3(0.50, 0.39, 0.25)
+	rockTint := vec3(0.46, 0.48, 0.47)
+	snowTint := vec3(0.84, 0.88, 0.86)
+	tint := mix(grassTint, soilTint, soilWeight)
+	tint = mix(tint, rockTint, rockWeight)
+	tint = mix(tint, snowTint, snowWeight)
+	luminance := dot(detail.rgb, vec3(0.299, 0.587, 0.114))
+	return vec4(tint*(0.72+luminance*0.72), 1.0)
+}
+
+func Fragment(dstPos vec4, srcPos vec2, color vec4) vec4 {
+	cameraX := 2.0*(1.0-dstPos.x/ScreenSize.x) - 1.0
+	rayXY := Dir + Plane*cameraX
+	screenY := dstPos.y - ScreenSize.y/2.0 - Pitch
+
+	hit := false
+	hitPos := vec2(0.0)
+	hitHeight := 0.0
+	distance := 0.08
+	stepDistance := TerrainNearStep
+	previousDistance := distance
+	previousHeight := TerrainHeight(Pos+rayXY*distance)
+
+	// Every distance uses the same 16-sample monotonic surface as CPU
+	// collision; only the ray step size grows toward the distance limit.
+	for i := 0; i < 260; i++ {
+		worldPos := Pos + rayXY*distance
+		if worldPos.x < 0.0 || worldPos.y < 0.0 || worldPos.x >= WorldSize.x-1.0 || worldPos.y >= WorldSize.y-1.0 {
+			break
+		}
+
+		rayZ := PosZ - screenY*distance/ScreenSize.y
+		height := TerrainHeight(worldPos)
+		if rayZ <= height {
+			hit = true
+			hitPos = worldPos
+			hitHeight = height
+			break
+		}
+		stepDistance = TerrainNearStep
+		if distance > TerrainMidDistance {
+			stepDistance = TerrainMidStep
+		}
+		if distance > TerrainFarDistance {
+			stepDistance = TerrainFarStep
+		}
+
+		// Stay conservative around silhouettes and steep height changes, while
+		// crossing empty air above flat terrain with fewer samples.
+		heightRate := abs(height-previousHeight)/max(0.001, distance-previousDistance)
+		clearance := rayZ-height
+		if TerrainAdaptive > 0.5 && clearance > TerrainSurfaceBand*3.0 && heightRate < 0.08 {
+			stepDistance = min(TerrainFarStep, stepDistance*TerrainFlatStepBoost)
+		}
+		previousDistance = distance
+		previousHeight = height
+		distance += stepDistance
+		if distance > TerrainMaxDistance {
+			break
+		}
+	}
+
+	if hit {
+		nearDistance := max(0.01, distance-stepDistance)
+		farDistance := distance
+		farHeight := hitHeight
+		// Five bisections are sub-pixel accurate at the internal render scale.
+		// Additional iterations only repeat the expensive Hermite lookup without
+		// producing a visible improvement after upscale.
+		for i := 0; i < 5; i++ {
+			midDistance := (nearDistance+farDistance)*0.5
+			midPos := Pos + rayXY*midDistance
+			midZ := PosZ - screenY*midDistance/ScreenSize.y
+			midHeight := TerrainHeight(midPos)
+			if midZ <= midHeight {
+				farDistance = midDistance
+				farHeight = midHeight
+			} else {
+				nearDistance = midDistance
+			}
+		}
+		distance = farDistance
+		hitPos = Pos + rayXY*distance
+		hitHeight = farHeight
+	}
+
+	// Intersect one horizontal water plane after the terrain traversal. This
+	// reuses the terrain hit distance and avoids a second raymarch pass.
+	waterHit := false
+	waterDistance := 0.0
+	waterPos := vec2(0.0)
+	waterGround := 0.0
+	if TerrainWaterEnabled > 0.5 && screenY > 0.001 && PosZ > TerrainWaterLevel {
+		waterDistance = (PosZ-TerrainWaterLevel)*ScreenSize.y/screenY
+		waterPos = Pos+rayXY*waterDistance
+		if waterDistance > 0.08 && waterDistance <= TerrainMaxDistance &&
+			waterPos.x >= 0.0 && waterPos.y >= 0.0 && waterPos.x < WorldSize.x-1.0 && waterPos.y < WorldSize.y-1.0 &&
+			(!hit || waterDistance < distance) {
+			// Shore depth tolerates a cheaper four-sample approximation; terrain
+			// geometry itself continues to use monotonic Hermite interpolation.
+			waterGround = TerrainHeightLinear(waterPos)
+			waterHit = waterGround < TerrainWaterLevel
+		}
+	}
+
+	if waterHit {
+		depth := TerrainWaterLevel-waterGround
+		shallow := 1.0-smoothstep(0.0, max(0.01, TerrainWaterShoreWidth), depth)
+		wave := sin(waterPos.x*5.1+waterPos.y*2.7) * sin(waterPos.y*4.3-waterPos.x*1.9)
+		wave *= TerrainWaterWaveStrength
+		viewGrazing := clamp(1.0-abs(screenY)/ScreenSize.y, 0.0, 1.0)
+		fresnel := TerrainWaterReflection*(0.35+0.65*viewGrazing)
+		skyReflection := mix(TerrainHorizonColor, TerrainZenithColor, clamp(viewGrazing+wave, 0.0, 1.0))
+		water := mix(TerrainWaterDeepColor, TerrainWaterShallowColor, clamp(shallow+wave, 0.0, 1.0))
+		water = mix(water, skyReflection, fresnel)
+		foam := smoothstep(0.58, 0.92, shallow+wave*2.0)
+		if TerrainDebugMode > 4.5 {
+			return vec4(mix(vec3(0.04, 0.16, 0.42), vec3(0.15, 0.9, 1.0), clamp(depth/max(0.01, TerrainWaterShoreWidth*4.0), 0.0, 1.0)), 1.0)
+		}
+		water = mix(water, vec3(0.72, 0.84, 0.75), foam*0.45)
+		fog := min(0.62, waterDistance*TerrainDistanceFog)
+		return vec4(mix(water, TerrainFogColor, fog), 1.0)
+	}
+
+	if hit {
+
+		if abs(dstPos.x-ScreenSize.x/2.0) < 1.0 && abs(dstPos.y-ScreenSize.y/2.0) < 1.0 {
+			return vec4(floor(hitPos.x)/255.0, floor(hitPos.y)/255.0, ceil(hitHeight)/255.0, 4.0/255.0)
+		}
+
+		surface := TerrainHeightAndGradient(hitPos)
+		hitHeight = surface.x
+		normal := normalize(vec3(-surface.y, -surface.z, 1.0))
+		if TerrainDebugMode > 0.5 && TerrainDebugMode < 1.5 {
+			v := clamp(hitHeight/max(1.0, TerrainDebugDepth), 0.0, 1.0)
+			return vec4(vec3(v), 1.0)
+		}
+		if TerrainDebugMode > 1.5 && TerrainDebugMode < 2.5 {
+			return vec4(normal*0.5+vec3(0.5), 1.0)
+		}
+		if TerrainDebugMode > 2.5 && TerrainDebugMode < 3.5 {
+			steep := clamp((1.0-normal.z)*3.0, 0.0, 1.0)
+			return vec4(mix(vec3(0.08, 0.65, 0.2), vec3(0.95, 0.12, 0.04), steep), 1.0)
+		}
+		if TerrainDebugMode > 3.5 && TerrainDebugMode < 4.5 {
+			v := TerrainVisibility(hitPos)
+			return vec4(vec3(v), 1.0)
+		}
+		if TerrainDebugMode > 4.5 {
+			return vec4(vec3(0.18), 1.0)
+		}
+		clr := SampleTerrainTexture(hitPos, hitHeight, normal, distance)
+		light := normalize(vec3(-0.45, -0.65, 0.85))
+		shade := 0.58 + 0.42*max(0.0, dot(normal, light))
+		shade *= 0.55 + 0.45*TerrainVisibility(hitPos)
+		distanceFog := min(0.62, distance*TerrainDistanceFog)
+		heightFog := clamp((TerrainFogBaseHeight-hitHeight)*TerrainHeightFog, 0.0, 0.38)
+		fog := 1.0-(1.0-distanceFog)*(1.0-heightFog)
+		return vec4(mix(clr.rgb*shade, TerrainFogColor, fog), 1.0)
+	}
+
+	skyT := clamp(dstPos.y/ScreenSize.y, 0.0, 1.0)
+	sky := mix(TerrainZenithColor, TerrainHorizonColor, skyT)
+	sunDirection := normalize(vec2(-0.45, -0.65))
+	sunAlignment := max(0.0, dot(normalize(rayXY), sunDirection))
+	sunBand := max(0.0, 1.0-abs(skyT-0.32)*6.0)
+	sun := pow(sunAlignment, 48.0)*sunBand*TerrainSunGlow
+	return vec4(mix(sky, vec3(1.0, 0.84, 0.62), sun), 1.0)
+}

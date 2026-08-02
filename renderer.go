@@ -20,6 +20,9 @@ import (
 //go:embed shaders/renderer3dmap.kage
 var shaderByte []byte
 
+//go:embed shaders/terrain.kage
+var terrainShaderByte []byte
+
 //go:embed shaders/renderWithNoTextures.kage
 var shaderByte2 []byte
 
@@ -439,6 +442,11 @@ func (r *Renderer) SetShaderFromBytes(b []byte) error {
 	}
 
 	return nil
+}
+
+// UseTerrainShader selects fray's standard heightmap terrain renderer.
+func (r *Renderer) UseTerrainShader() error {
+	return r.SetShaderFromBytes(terrainShaderByte)
 }
 
 // func (r *Renderer) SetLevel(level [][]float32, width, height int) {
