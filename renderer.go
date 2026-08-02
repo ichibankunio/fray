@@ -128,8 +128,9 @@ type Renderer struct {
 	canvasWidth  int
 	canvasHeight int
 
-	shader  *ebiten.Shader
-	shader2 *ebiten.Shader
+	shader       *ebiten.Shader
+	shader2      *ebiten.Shader
+	shaderSource []byte
 
 	Textures [4]*ImageSrc
 
@@ -142,6 +143,8 @@ type Renderer struct {
 	terrainWaterConfig      TerrainWaterConfig
 	terrainDebugMode        TerrainDebugMode
 	frameStats              frameStatsRecorder
+	terrainUploadBuffer     []byte
+	performanceSections     performanceSectionRecorder
 
 	aimPos        vec3.Vec3
 	aimDirection  AimDirection
@@ -188,6 +191,17 @@ const (
 )
 
 func (r *Renderer) Init(screenWidth, screenHeight float64, canvasWidth, canvasHeight, canvasDepth int, texSize int) {
+	if err := r.InitWithError(screenWidth, screenHeight, canvasWidth, canvasHeight, canvasDepth, texSize); err != nil {
+		panic(err)
+	}
+}
+
+// InitWithError initializes a renderer without panicking on invalid input or
+// shader compilation failure. Init remains as a compatibility wrapper.
+func (r *Renderer) InitWithError(screenWidth, screenHeight float64, canvasWidth, canvasHeight, canvasDepth int, texSize int) error {
+	if screenWidth <= 0 || screenHeight <= 0 || canvasWidth <= 0 || canvasHeight <= 0 || canvasDepth <= 0 || texSize <= 0 {
+		return fmt.Errorf("initialize renderer: dimensions and texture size must be positive")
+	}
 	r.Cam = &Camera{}
 	r.Cam.Init(screenWidth, screenHeight)
 
@@ -208,14 +222,18 @@ func (r *Renderer) Init(screenWidth, screenHeight float64, canvasWidth, canvasHe
 	var err error
 	r.shader, err = ebiten.NewShader(shaderByte)
 	if err != nil {
-		panic(err)
+		return fmt.Errorf("compile default renderer shader: %w", err)
 	}
+	r.shaderSource = append([]byte(nil), shaderByte...)
 
 	r.shader2, err = ebiten.NewShader(shaderByte2)
 	if err != nil {
-		panic(err)
+		return fmt.Errorf("compile textureless renderer shader: %w", err)
 	}
-	r.pseudoShadowShader, _ = ebiten.NewShader(pseudoShadowShaderByte)
+	r.pseudoShadowShader, err = ebiten.NewShader(pseudoShadowShaderByte)
+	if err != nil {
+		return fmt.Errorf("compile pseudo-shadow shader: %w", err)
+	}
 	r.terrainRenderScale = 1
 	r.terrainRaymarchConfig = DefaultTerrainRaymarchConfig()
 	r.terrainAtmosphereConfig = DefaultTerrainAtmosphereConfig()
@@ -252,6 +270,7 @@ func (r *Renderer) Init(screenWidth, screenHeight float64, canvasWidth, canvasHe
 	if r.pseudoShadowShader == nil {
 		r.pseudoShadowConfig.Enabled = false
 	}
+	return nil
 }
 
 func defaultPseudoShadowConfig(screenHeight float32) PseudoShadowConfig {
@@ -433,15 +452,16 @@ func (r *Renderer) NewTextureSheet1x2(src []*ebiten.Image) *ebiten.Image {
 
 func (r *Renderer) SetShader(s *ebiten.Shader) {
 	r.shader = s
+	r.shaderSource = nil
 }
 
-func (r *Renderer) SetShaderFromBytes(b []byte) error {
-	var err error
-	r.shader, err = ebiten.NewShader(b)
+func (r *Renderer) SetShaderFromBytes(source []byte) error {
+	shader, err := ebiten.NewShader(source)
 	if err != nil {
 		return err
 	}
-
+	r.shader = shader
+	r.shaderSource = append([]byte(nil), source...)
 	return nil
 }
 

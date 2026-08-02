@@ -82,22 +82,23 @@ func (w *World) RaycastTerrain(origin, direction vec3.Vec3, maxDistance float64,
 	}
 
 	previousDistance := 0.0
-	previousSample := w.SampleTerrain(origin.X, origin.Y)
-	previousClearance := origin.Z - previousSample.Position.Z
-	if previousSample.Inside && previousClearance <= 0 {
-		return TerrainRaycastHit{TerrainSample: previousSample}, true
+	previousInside := w.terrainPointInside(origin.X, origin.Y)
+	previousHeight := w.heightAtBlocks(origin.X, origin.Y)
+	previousClearance := origin.Z - previousHeight
+	if previousInside && previousClearance <= 0 {
+		return TerrainRaycastHit{TerrainSample: w.SampleTerrain(origin.X, origin.Y)}, true
 	}
 	for distance := min(config.Step, maxDistance); distance <= maxDistance+1e-12; distance = min(distance+config.Step, maxDistance) {
 		point := origin.Add(direction.Scale(distance))
-		sample := w.SampleTerrain(point.X, point.Y)
-		clearance := point.Z - sample.Position.Z
-		if sample.Inside && previousSample.Inside && previousClearance > 0 && clearance <= 0 {
+		inside := w.terrainPointInside(point.X, point.Y)
+		height := w.heightAtBlocks(point.X, point.Y)
+		clearance := point.Z - height
+		if inside && previousInside && previousClearance > 0 && clearance <= 0 {
 			near, far := previousDistance, distance
 			for i := 0; i < config.RefinementSteps; i++ {
 				mid := (near + far) * 0.5
 				midPoint := origin.Add(direction.Scale(mid))
-				midSample := w.SampleTerrain(midPoint.X, midPoint.Y)
-				if midPoint.Z <= midSample.Position.Z {
+				if midPoint.Z <= w.heightAtBlocks(midPoint.X, midPoint.Y) {
 					far = mid
 				} else {
 					near = mid
@@ -111,10 +112,14 @@ func (w *World) RaycastTerrain(origin, direction vec3.Vec3, maxDistance float64,
 			break
 		}
 		previousDistance = distance
-		previousSample = sample
+		previousInside = inside
 		previousClearance = clearance
 	}
 	return TerrainRaycastHit{}, false
+}
+
+func (w *World) terrainPointInside(x, y float64) bool {
+	return x >= 0 && y >= 0 && x < float64(w.canvasWidth) && y < float64(w.canvasHeight)
 }
 
 func (w *World) terrainGradientAtBlocks(x, y float64) terrainGradient {
